@@ -1,4 +1,4 @@
-# Osu! Mascot Archive
+# osu! Mascot Archive
 
 Welcome to this first stage of collaborative research and preservation profect for osu! mascot-related media, artwork, references, concepts and community history.
 
@@ -221,17 +221,3 @@ git commit -m "added stream-era pippi artwork"
 - descriptive commit messages
 - local asset preservation
 - structured tags
-
----
-
-# 10. Core Principles
-
-Priority order:
-
-1. Preservation
-2. Consistency
-3. Searchability
-4. Scalability
-5. Relationships
-
-Perfect documentation is less important than sustainable archival workflow.

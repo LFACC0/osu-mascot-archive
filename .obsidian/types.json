@@ -9,6 +9,7 @@
     "characters": "multitext",
     "related": "multitext",
     "status": "text",
-    "artist": "multitext"
+    "artist": "multitext",
+    "date": "text"
   }
 }
