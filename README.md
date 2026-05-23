@@ -1,338 +1,87 @@
-# osu-mascot-archive
-## Core Philosophy
+# Osu! Mascot Archive
 
-- Preserve first, organize later.
-    
-- Metadata matters more than long prose.
-    
-- Keep entries lightweight and scalable.
-    
-- Separate capture from curation.
-    
-- Folders are broad categories; YAML handles organization.
-    
+Welcome to this first stage of collaborative research and preservation profect for osu! mascot-related media, artwork, references, concepts and community history.
 
----
+This archive aims to document both official and fan-created material in a structured format.
 
-# Folder Structure
+If you want to collaborate and test this system, feel free to follow the instructions and rules written down here. 
+# osu! Mascot Archive — Collaboration Setup
 
-```text
-osu-mascot-archive/
+## 1. Install Required Software
 
-    00_Home/
+### Git
 
-    01_Characters/
-    02_Artwork/
-    03_Artists/
-    04_Events/
-    05_Eras/
-    06_Concepts/
+Arch / EndeavourOS:
 
-    07_Assets/
-        official/
-        community/
-        contests/
-        memes/
-        screenshots/
-        lost-media/
-
-    08_Templates/
-
-    99_Staging/
-        00_inbox/
-        01_needs-id/
-        02_needs-source/
-        03_needs-tags/
-        04_possible-duplicates/
-        05_unverified/
+```bash
+sudo pacman -S git git-lfs
 ```
 
 ---
 
-# Required Plugins
+### Obsidian
 
-- Dataview
-    
-- Templater
-    
-- Metadata Menu
-    
-- Folder Notes
-    
-- Excalibrain
-    
-- Custom File Explorer Sorting
-    
-- Waypoint
-    
+Download:
 
-Recommended theme:
-
-- Minimal Theme
-    
-- Style Settings
-    
+https://obsidian.md/
 
 ---
 
-# Folder Philosophy
+# 2. Clone Repository
 
-Avoid deep nesting.
-
-BAD:
-
-```text
-Artwork/Pippi/Official/2013/Winter/
+```bash
+git clone git@github.com:USER/REPO.git
 ```
-
-GOOD:
-
-```text
-02_Artwork/PIP-0044.md
-```
-
-Organization should happen through:
-
-- YAML
-    
-- tags
-    
-- Dataview
-    
-- relationships
-    
-
----
-
-# Entry IDs
-
-```text
-PIP-0001
-YUZ-0001
-MOCH-0001
-```
-
-IDs should never be reused.
-
----
-
-# Asset Naming
-
-Recommended:
-
-```text
-PIP-0044_daru_2013_official.webp
-```
-
-Minimal alternative:
-
-```text
-PIP-0044.webp
-```
-
----
-
-# Canon Classification
-
-```yaml
-canon: official
-```
-
-Possible values:
-
-- official
-    
-- semi-official
-    
-- community
-    
-- fanon
-    
-- unknown
-    
-- lost-media
-    
-
----
-
-# Tagging
-
-GOOD:
-
-```yaml
-tags:
-  - character/pippi
-  - source/official
-  - era/lazer
-  - type/fanart
-```
-
-BAD:
-
-```yaml
-#pippi #cute #animegirl
-```
-
----
-
-# Metadata Template
-
-```yaml
----
-id: PIP-0044
-
-title: Pippi winter outfit
-
-characters:
-  - pippi
-
-artists:
-  - Daru
-
-year: 2013
-
-type:
-  - official-art
-
-canon: official
-
-source:
-  - osu!stream
-
-source_url:
-  - https://...
-
-tags:
-  - character/pippi
-  - era/stream
-
-related:
-  - "[[osu!stream era]]"
-
-status: archived
----
-```
-
----
-
-# Standard Entry Structure
-
-```md
----
-(here goes the metadata)
----
-
-# Title of the entry
-
-![[PIP-0044.webp]]
-
-## Notes
-
-Used during osu!stream promotional material.
-Any short description about the entry.
-```
-
----
-
-# Workflow
-
-```text
-Find material
-    ↓
-Save asset locally
-    ↓
-Create note from template
-    ↓
-Fill YAML metadata
-    ↓
-Insert preview
-    ↓
-Add minimal notes
-    ↓
-Archive complete
-```
-
----
-
-# Staging Philosophy
-
-Purpose:
-
-- inbox
-    
-- raw intake
-    
-- unresolved material
-    
-- temporary processing
-    
-
-Workflow:
-
-```text
-Find content
-    ↓
-Store in staging
-    ↓
-Process later
-    ↓
-Move into archive
-```
-
-Staging is NOT a permanent storage.
-
----
-# Extra tools (for more mature archive stage)
-#### Relationships
 
 Example:
 
-```yaml
-related:
-  - "[[pippi]]"
-  - "[[Daru]]"
-  - "[[osu!stream era]]"
+```bash
+git clone git@github.com:FatalNight/osu-mascot-archive.git
 ```
 
 ---
 
-#### Character Hub Example
+# 3. Open Vault
 
-````md
-# Pippi
+In Obsidian:
 
-```dataview
-table year, artist, type
-from "02_Artwork"
-where contains(character, "pippi")
-sort year asc
+```text
+Open folder as vault
 ```
-````
+
+Select:
+
+```text
+osu-mascot-archive/
+```
 
 ---
 
-# Git Workflow
+# 4. Install Community Plugins
 
-Initialize repository:
+Enable:
 
-```bash
-git init
+```text
+Settings
+→ Community Plugins
+→ Turn off Safe Mode
 ```
 
-Save changes:
+Required plugins:
 
-```bash
-git add .
-git commit -m "added pippi archive entries"
-```
+- Dataview
+- Templater
+- Metadata Menu
+- Folder Notes
+- Excalibrain
+- Waypoint
+- Custom File Explorer Sorting
 
-Upload:
+---
 
-```bash
-git push
-```
+# 5. Pull Latest Changes
 
-Download collaborator changes:
+Before starting work:
 
 ```bash
 git pull
@@ -340,62 +89,149 @@ git pull
 
 ---
 
-# Git LFS
+# 6. Standard Workflow
+
+## Add new assets
+
+Place files inside:
+
+```text
+07_Assets/
+```
+
+---
+
+## Create entry
+
+Create note inside:
+
+```text
+02_Artwork/
+```
+
+Example:
+
+```text
+PIP-0044.md
+```
+
+---
+
+## Add metadata
+
+Example:
+
+```yaml
+---
+id: PIP-0044
+
+title: Pippi winter outfit
+
+character:
+  - pippi
+
+artist:
+  - Daru
+
+year: 2013
+
+type:
+  - official_art
+
+canon: official
+
+source:
+  - osu!stream
+
+tags:
+  - character/pippi
+  - era/stream
+
+related:
+  - "[[Daru]]"
+
+status: archived
+---
+```
+
+---
+
+## Insert preview
+
+```md
+![[07_Assets/PIP-0044.webp]]
+```
+
+---
+
+# 7. Staging Workflow
+
+Temporary/raw material goes into:
+
+```text
+99_Staging/
+```
+
+Use staging for:
+
+- unsorted assets
+- missing metadata
+- unknown artists
+- unresolved sources
+- possible duplicates
+
+Move entries into the main archive once curated.
+
+---
+
+# 8. Save Changes
+
+After finishing work:
 
 ```bash
-git lfs install
-git lfs track "*.png"
-git lfs track "*.jpg"
-git lfs track "*.webp"
+git add .
+git commit -m "describe your changes"
+git push
+```
+
+Example:
+
+```bash
+git commit -m "added stream-era pippi artwork"
 ```
 
 ---
 
-# .gitignore
+# 9. Important Rules
 
-```gitignore
-.obsidian/workspace*
-.obsidian/cache
-.trash
-.DS_Store
-```
+## Do not:
 
-Do not ignore the entire `.obsidian/` folder.
+- rename IDs after creation
+- delete source information
+- upload compressed screenshots instead of originals
+- reorganize folders without discussion
+- overwrite collaborator work
 
 ---
 
-# Long-Term Goal
+## Prefer:
 
-The archive may eventually evolve into:
+- consistent metadata
+- small commits
+- descriptive commit messages
+- local asset preservation
+- structured tags
 
-- public wiki
-    
-- fandom preservation project
-    
-- historical database
-    
-- visual relationship graph
-    
-- research resource
-    
-- collaborative archive
-    
-- Anything else
 ---
 
-# Final Principle
+# 10. Core Principles
 
-Prioritize:
+Priority order:
 
 1. Preservation
-    
 2. Consistency
-    
 3. Searchability
-    
 4. Scalability
-    
 5. Relationships
-    
 
-A sustainable workflow matters more than perfect documentation.
+Perfect documentation is less important than sustainable archival workflow.
