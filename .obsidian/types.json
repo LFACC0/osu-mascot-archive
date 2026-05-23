@@ -1,0 +1,14 @@
+{
+  "types": {
+    "aliases": "aliases",
+    "cssclasses": "multitext",
+    "tags": "tags",
+    "character": "multitext",
+    "artists": "multitext",
+    "source": "multitext",
+    "characters": "multitext",
+    "related": "multitext",
+    "status": "text",
+    "artist": "multitext"
+  }
+}
