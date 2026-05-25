@@ -1,4 +1,14 @@
+
+#OBSIDIAN RELATED
 .obsidian/workspace*
 .obsidian/cache
 .trash
 .DS_Store
+
+# .NET build output
+**/bin/
+**/obj/
+
+# JetBrains Rider / IntelliJ local state
+**/.idea/**/workspace.xml
+**/.idea/**/projectSettingsUpdater.xml
