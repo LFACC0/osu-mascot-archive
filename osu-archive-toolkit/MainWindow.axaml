@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" 
+        d:DesignWidth="800" 
+        d:DesignHeight="450"
+        x:Class="osuArchiveToolkit.MainWindow"
+        Title="osuArchiveToolkit">
+    
+    <!-- THE AI STOPPED AT THIS CODING PHASE, WE NEED TO HIDE THE SECOND STACKPANEL UNTIL THE FIRST ONE
+    COMPLETES THE STARTER SETUP (GIT USER AND VAULT PATH) -->
+        <StackPanel Margin="20" Spacing="10">
+               
+            <!-- SETUP PANEL -->
+            <StackPanel
+                x:Name="SetupPanel"
+                Spacing="10">
+                   
+                   <TextBox
+                       x:Name="StatusLog"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       Height="250">
+                   </TextBox>
+                   <Button
+                       x:Name="GitUserButton"
+                       Content="Retry Git User load"
+                       Click="OnLoadGitUserClick">
+                   </Button>
+                <Button
+                    Content="Select workspace path"
+                    Click="OnSelectVaultClick">
+                </Button>
+               </StackPanel> 
+            
+            <!-- INTAKE PANEL -->
+            <StackPanel
+                x:Name="IntakePanel"
+                Spacing="10"
+                IsVisible="False">
+    
+                <TextBlock 
+                    Text="Intake Panel Loaded">
+                </TextBlock>
+            
+                <Button
+                    x:Name="SelectImageButton"
+                    Content="SelectImage"
+                    Click="OnSelectImageClick">
+                </Button>
+            </StackPanel>
+        </StackPanel>
+        
+       
+
+</Window>
