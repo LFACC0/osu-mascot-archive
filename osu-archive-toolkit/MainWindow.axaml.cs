@@ -21,6 +21,7 @@ public partial class MainWindow : Window
             "____________________________";
 
         LoadGitUser();
+        UpdateSetupState();
     }
 
     private async void OnSelectWorkspaceClick(object? sender, RoutedEventArgs e)
@@ -46,34 +47,87 @@ public partial class MainWindow : Window
         }
     }
 
-    private void TryEnterIntakeMode()
+    private bool IsSetupComplete()
     {
-        if (intakeModeEnabled)
-        {
-            return;
-        }
-        
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
-            AddLog("Workspace path is required before entering intake mode.");
-            return;
+            return false;
         }
 
         if (!ValidateWorkspaceStructure())
         {
-            AddLog("Invalid workspace folder. Select osu-mascot-workspace or the repo folder that contains it.");
+            return false;
+        }
+
+        if (gitUser == "Unknown")
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateSetupWithLog()
+    {
+        if (string.IsNullOrWhiteSpace(workspacePath))
+        {
+            AddLog("Workspace path is required before continuing");
+            return false;
+        }
+
+        if (!ValidateWorkspaceStructure())
+        {
+            AddLog("Invalid workspace folder, Select osu-mascot-workspace or the repo folder that contains it");
+            return false;
+        }
+
+        if (gitUser == "Unknown")
+        {
+            AddLog("Git username is required before continuing.");
+            return false;
+        }
+
+        return true;
+    }
+        
+    private void UpdateSetupState()
+    {
+        WorkspaceStatusText.Text = string.IsNullOrWhiteSpace(workspacePath)
+            ? "Workspace: not selected"
+            : $"Workspace: {workspacePath}";
+
+        GitUserStatusText.Text = gitUser == "Unknown"
+            ? "Git user: not loaded"
+            : $"Git user: {gitUser}";
+
+        NextButton.IsEnabled = IsSetupComplete();
+    }
+    private void TryEnterIntakeMode()
+    {
+        UpdateSetupState();
+
+        if (!ValidateSetupWithLog())
+        {
             return;
         }
         
-        AddLog("Valid workspace structure detected.");
-        
-        if (gitUser == "Unknown")
+        AddLog("Setup complete. Ready to continue.");
+    }
+
+    private void OnNextClick(object? sender, RoutedEventArgs e)
+    {
+        if (!IsSetupComplete())
         {
-            AddLog("Git username is required before entering intake mode.");
+            AddLog("Setup is not complete yet.");
             return;
         }
         
         EnterIntakeMode();
+    }
+
+    private void OnBackClick(object? sender, RoutedEventArgs e)
+    {
+        ExitIntakeMode();
     }
     private void AddLog(string message)
     {
@@ -98,11 +152,11 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-            FilePickerFileTypes.ImageAll 
+                FilePickerFileTypes.ImageAll 
             }
         });
         
-        SelectImageButton.Content = "Select Image";
+        SelectImageButton.Content = "Import Image";
         
         if (files.Count == 0)
         {
@@ -192,11 +246,25 @@ public partial class MainWindow : Window
         return incomingExists && stagingExists;
     }
 
+    private void ExitIntakeMode()
+    {
+        intakeModeEnabled = false;
+
+        SetupPanel.IsVisible = true;
+        IntakePanel.IsVisible = false;
+        NextButton.IsVisible = true;
+
+        StatusLog.Text = "";
+        AddLog("Returned to setup mode.");
+        
+        UpdateSetupState();
+    }
     private void EnterIntakeMode()
     {
         intakeModeEnabled = true;
         SetupPanel.IsVisible = false;
         IntakePanel.IsVisible = true;
+        NextButton.IsVisible = false;
 
         StatusLog.Text = "";
         AddLog("Intake mode enabled.");
