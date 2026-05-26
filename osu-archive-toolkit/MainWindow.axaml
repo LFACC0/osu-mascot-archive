@@ -44,12 +44,12 @@
                 IsVisible="False">
     
                 <TextBlock 
-                    Text="Intake Panel Loaded">
+                    Text="Intake Mode">
                 </TextBlock>
             
                 <Button
                     x:Name="SelectImageButton"
-                    Content="SelectImage"
+                    Content="Import Image"
                     Click="OnSelectImageClick">
                 </Button>
             </StackPanel>

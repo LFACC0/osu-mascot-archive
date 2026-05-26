@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using System.Diagnostics;
+using System.IO.Enumeration;
+
 namespace osuArchiveToolkit;
 
 public partial class MainWindow : Window
@@ -93,7 +95,11 @@ public partial class MainWindow : Window
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Select an image",
-            AllowMultiple = false
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+            FilePickerFileTypes.ImageAll 
+            }
         });
         
         SelectImageButton.Content = "Select Image";
@@ -173,12 +179,25 @@ public partial class MainWindow : Window
         return selectedPath;
     }
 
-//METHODS
+//HELPERS
+    private bool IsSupportedImageFile(string fileName)
+    {
+        var extension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+
+        return extension == ".png"
+               || extension == ".jpg"
+               || extension == ".jpeg"
+               || extension == ".webp"
+               || extension == ".gif";
+    }
 
     private void ImportImage(string selectedFile)
     {
         var fileName = System.IO.Path.GetFileName(selectedFile);
-
+        if (!IsSupportedImageFile(fileName))
+        {
+            throw new InvalidOperationException($"Unsupported image type: {System.IO.Path.GetExtension(fileName)}");
+        }
         EnsureIncomingDirectories();
 
         var destinationPath = GetIncomingAssetPath(fileName);
@@ -250,7 +269,7 @@ sources:
 source_url:
 related:
 status:
-official_ID:
+official_id:
 curated_by:
 ---
 
