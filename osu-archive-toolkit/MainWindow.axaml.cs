@@ -21,7 +21,7 @@ public partial class MainWindow : Window
             "____________________________";
 
         LoadGitUser();
-        UpdateSetupState();
+        NextButton.IsVisible = false;
     }
 
     private async void OnSelectWorkspaceClick(object? sender, RoutedEventArgs e)
@@ -114,6 +114,17 @@ public partial class MainWindow : Window
         AddLog("Setup complete. Ready to continue.");
     }
 
+    private void OnCollaboratorModeClick(object? sender, RoutedEventArgs e)
+    {
+        WelcomePanel.IsVisible = false;
+        SetupPanel.IsVisible = true;
+        NextButton.IsVisible = true;
+
+        StatusLog.Text = "";
+        AddLog("Collaborator mode selected");
+        
+        UpdateSetupState();
+    }
     private void OnNextClick(object? sender, RoutedEventArgs e)
     {
         if (!IsSetupComplete())
@@ -171,6 +182,7 @@ public partial class MainWindow : Window
             var importedFileName = importService.ImportImage(selectedFile);
             
             AddLog($"Imported: {importedFileName}");
+            ShowSuccessPanel();
         }
         catch (Exception ex)
         {
@@ -222,6 +234,23 @@ public partial class MainWindow : Window
       
     }
 
+    private void ShowSuccessPanel()
+    {
+        IntakePanel.IsVisible = false;
+        SuccessPanel.IsVisible = true;
+
+        StatusLog.Text = "";
+        AddLog("Entry added successfully.");
+    }
+
+    private void OnAddOtherEntryClick(object? sender, RoutedEventArgs e)
+    {
+        SuccessPanel.IsVisible = false;
+        IntakePanel.IsVisible = true;
+
+        StatusLog.Text = "";
+        AddLog("Ready to add another entry.");
+    }
     private string ResolveWorkspacePath(string selectedPath)
     {
         var nestedWorkspacePath = System.IO.Path.Combine(

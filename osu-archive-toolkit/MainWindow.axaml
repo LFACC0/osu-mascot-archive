@@ -6,15 +6,44 @@
         d:DesignWidth="800" 
         d:DesignHeight="450"
         x:Class="osuArchiveToolkit.MainWindow"
-        Title="osuArchiveToolkit">
+        Title="osuArchiveToolkit"
+        Background="#444444">
     
-        <StackPanel Margin="20" Spacing="10">
-            <TextBlock
-                Text="osu! Mascot Archive Toolkit"
+    <StackPanel Margin="20" Spacing="10">
+     
+        <TextBlock
+            Text="osu! Mascot Archive Toolkit"
+            HorizontalAlignment="Center"
+            FontSize="22"
+            FontWeight="SemiBold">
+        </TextBlock>
+        <!-- WELCOME PANEL -->
+        <StackPanel
+            x:Name="WelcomePanel"
+            Spacing="14"
+            HorizontalAlignment="Center">
+            
+            <Image
+                Source="avares://osuArchiveToolkit/Assets/welcome.png"
+                Width="180"
+                Height="180"
+                Stretch="UniformToFill">
+            </Image>
+            
+            <Button
+                x:Name="CollaboratorModeButton"
+                Content="Collaborator Mode"
                 HorizontalAlignment="Center"
-                FontSize="22"
-                FontWeight="SemiBold">
-            </TextBlock>
+                Click="OnCollaboratorModeClick">
+            </Button>
+            
+            <Button
+                x:Name="CuratorModeButton"
+                Content="Curator Mode (soon)"
+                HorizontalAlignment="Center"
+                IsEnabled="False">
+            </Button>
+        </StackPanel>
             
             <!-- LOG CONSOLE -->
             <TextBox
@@ -23,12 +52,14 @@
                 AcceptsReturn="True"
                 FontSize="15"
                 Height="250">
+                
             </TextBox>
                
             <!-- SETUP PANEL -->
             <StackPanel
                 x:Name="SetupPanel"
-                Spacing="10">
+                Spacing="10"
+                IsVisible="False">
                 
                 <TextBlock
                     x:Name="WorkspaceStatusText"
@@ -75,7 +106,25 @@
                     Click="OnSelectImageClick">
                 </Button>
             </StackPanel>
-            
+        
+            <!-- SUCCESS PANEL -->
+            <StackPanel
+                x:Name="SuccessPanel"
+                Spacing="10"
+                IsVisible="False"
+                HorizontalAlignment="Center">
+                
+                <TextBlock
+                    Text="Entry Added Successfully!"
+                    FontSize="20"
+                    FontWeight="SemiBold"
+                    HorizontalAlignment="Center">
+                </TextBlock>
+                <Button
+                    Content="Add other entry"
+                    Click="OnAddOtherEntryClick">
+                </Button>
+            </StackPanel>
             <Grid>
                 <Button
                     x:Name="NextButton"
