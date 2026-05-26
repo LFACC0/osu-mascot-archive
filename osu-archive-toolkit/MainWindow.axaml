@@ -11,18 +11,21 @@
     <!-- THE AI STOPPED AT THIS CODING PHASE, WE NEED TO HIDE THE SECOND STACKPANEL UNTIL THE FIRST ONE
     COMPLETES THE STARTER SETUP (GIT USER AND VAULT PATH) -->
         <StackPanel Margin="20" Spacing="10">
+            
+            <!-- LOG CONSOLE -->
+            <TextBox
+                x:Name="StatusLog"
+                IsReadOnly="True"
+                AcceptsReturn="True"
+                Height="250">
+            </TextBox>
                
             <!-- SETUP PANEL -->
             <StackPanel
                 x:Name="SetupPanel"
                 Spacing="10">
                    
-                   <TextBox
-                       x:Name="StatusLog"
-                       IsReadOnly="True"
-                       AcceptsReturn="True"
-                       Height="250">
-                   </TextBox>
+                   
                    <Button
                        x:Name="GitUserButton"
                        Content="Retry Git User load"
@@ -30,7 +33,7 @@
                    </Button>
                 <Button
                     Content="Select workspace path"
-                    Click="OnSelectVaultClick">
+                    Click="OnSelectWorkspaceClick">
                 </Button>
                </StackPanel> 
             
