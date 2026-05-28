@@ -4,7 +4,8 @@
 .obsidian/cache
 .trash
 .DS_Store
-
+osu-mascot-workspace/local_entries
+osu-mascot-workspace/local_entries/local_assets
 # .NET build output
 **/bin/
 **/obj/

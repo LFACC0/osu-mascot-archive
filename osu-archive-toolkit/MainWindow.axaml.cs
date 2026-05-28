@@ -15,11 +15,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        StatusLog.Text =
-            "1. No File selected\n" +
-            "2. Waiting for git username\n" +
-            "____________________________";
-
+        StatusLog.Text = "Welcome to the toolkit!";
         LoadGitUser();
         NextButton.IsVisible = false;
     }
@@ -102,6 +98,12 @@ public partial class MainWindow : Window
 
         NextButton.IsEnabled = IsSetupComplete();
     }
+
+    public string GitUserAbbreviation()
+    {
+        string firstThreeChar = gitUser.Substring(0, 3);
+        return firstThreeChar;
+    }
     private void TryEnterIntakeMode()
     {
         UpdateSetupState();
@@ -178,11 +180,14 @@ public partial class MainWindow : Window
 
         try
         {
-            var importService = new IncomingImportService(workspacePath, gitUser);
+            var importService = new LocalImportService(workspacePath, gitUser);
             var importedFileName = importService.ImportImage(selectedFile);
-            
             AddLog($"Imported: {importedFileName}");
+
+            //var temporaryLocalAssetName = importService.TempImageName(importedFileName);
+            //AddLog($"Renamed file to: {temporaryLocalAssetName}");
             ShowSuccessPanel();
+            
         }
         catch (Exception ex)
         {
@@ -288,14 +293,16 @@ public partial class MainWindow : Window
         
         UpdateSetupState();
     }
+    private LocalImportService? _importService;
     private void EnterIntakeMode()
     {
         intakeModeEnabled = true;
         SetupPanel.IsVisible = false;
         IntakePanel.IsVisible = true;
         NextButton.IsVisible = false;
-
+        
         StatusLog.Text = "";
+        _importService = new LocalImportService(workspacePath, gitUser);
         AddLog("Intake mode enabled.");
     }
     private void OnLoadGitUserClick(object? sender, RoutedEventArgs e)
