@@ -8,8 +8,10 @@ Welcome to this first stage of collaborative research and preservation profect f
 
 This archive aims to document both official and fan-created material in a structured format.
 
-If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
+# If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
 (I'll be really glad to cooperate and push the pending features with you. I'm still very new to the Csharp enviroment and the code writing).
+
+---
 
 If you want to test this system, feel free to follow the instructions and rules written down here.
 # osu! Mascot Archive — Testing Setup
