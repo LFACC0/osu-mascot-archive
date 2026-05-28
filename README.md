@@ -11,6 +11,9 @@ This archive aims to document both official and fan-created material in a struct
 # If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
 (I'll be really glad to cooperate and push the pending features with you. I'm still very new to the Csharp enviroment and the code writing).
 
+[Preview of the toolkit I'm working on](https://youtu.be/jqpfQ-Opb-g)
+
+
 ---
 
 If you want to test this system, feel free to follow the instructions and rules written down here.
