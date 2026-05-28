@@ -97,4 +97,4 @@ git pull
 ```
 
 ---
-#6. Install the Toolkit (Soon, Hopefully)
+# 6. Install the Toolkit (Soon, Hopefully)
