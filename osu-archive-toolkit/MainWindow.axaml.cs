@@ -3,15 +3,15 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using System.Diagnostics;
+using System.Threading.Tasks;
+using Avalonia.Controls.Shapes;
 using osuArchiveToolkit.Services;
-
 namespace osuArchiveToolkit;
-
 public partial class MainWindow : Window
 {
-    private string gitUser = "Unknown";
-    private string workspacePath = "";
-    private bool intakeModeEnabled = false;
+    private string _gitUser = "Unknown";
+    private string _workspacePath = "";
+    private bool _intakeModeEnabled = false;
     public MainWindow()
     {
         InitializeComponent();
@@ -35,9 +35,9 @@ public partial class MainWindow : Window
             });
         if (folders.Count > 0)
         {
-            workspacePath = ResolveWorkspacePath(folders[0].Path.LocalPath);
+            _workspacePath = ResolveWorkspacePath(folders[0].Path.LocalPath);
 
-            AddLog($"Workspace selected: {workspacePath}");
+            AddLog($"Workspace selected: {_workspacePath}");
 
             TryEnterIntakeMode();
         }
@@ -45,7 +45,7 @@ public partial class MainWindow : Window
 
     private bool IsSetupComplete()
     {
-        if (string.IsNullOrWhiteSpace(workspacePath))
+        if (string.IsNullOrWhiteSpace(_workspacePath))
         {
             return false;
         }
@@ -55,7 +55,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (gitUser == "Unknown")
+        if (_gitUser == "Unknown")
         {
             return false;
         }
@@ -65,7 +65,7 @@ public partial class MainWindow : Window
 
     private bool ValidateSetupWithLog()
     {
-        if (string.IsNullOrWhiteSpace(workspacePath))
+        if (string.IsNullOrWhiteSpace(_workspacePath))
         {
             AddLog("Workspace path is required before continuing");
             return false;
@@ -77,7 +77,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (gitUser == "Unknown")
+        if (_gitUser == "Unknown")
         {
             AddLog("Git username is required before continuing.");
             return false;
@@ -88,22 +88,17 @@ public partial class MainWindow : Window
         
     private void UpdateSetupState()
     {
-        WorkspaceStatusText.Text = string.IsNullOrWhiteSpace(workspacePath)
+        WorkspaceStatusText.Text = string.IsNullOrWhiteSpace(_workspacePath)
             ? "Workspace: not selected"
-            : $"Workspace: {workspacePath}";
+            : $"Workspace: {_workspacePath}";
 
-        GitUserStatusText.Text = gitUser == "Unknown"
+        GitUserStatusText.Text = _gitUser == "Unknown"
             ? "Git user: not loaded"
-            : $"Git user: {gitUser}";
+            : $"Git user: {_gitUser}";
 
         NextButton.IsEnabled = IsSetupComplete();
     }
-
-    public string GitUserAbbreviation()
-    {
-        string firstThreeChar = gitUser.Substring(0, 3);
-        return firstThreeChar;
-    }
+    
     private void TryEnterIntakeMode()
     {
         UpdateSetupState();
@@ -147,12 +142,54 @@ public partial class MainWindow : Window
         StatusLog.Text += $"\n> {message}";
         StatusLog.CaretIndex = StatusLog.Text.Length;
     }
+    private void OnLoadGitUserClick(object? sender, RoutedEventArgs e)
+    {
+        LoadGitUser();
+    }
     
+    private void OnAddOtherEntryClick(object? sender, RoutedEventArgs e)
+    {
+        SuccessPanel.IsVisible = false;
+        IntakePanel.IsVisible = true;
+
+        StatusLog.Text = "";
+        AddLog("Ready to add another entry.");
+    }
+
+    private async void OnOpenEntryInObsidian(object? sender, RoutedEventArgs e)
+    {
+        var lastEntryPath = _importService.LastEntryTempName;
+
+        try
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                OpenInObsidianButton.IsVisible = false;
+                AddLog("Ready for editing in obsidian");
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo()
+                {
+                    FileName = lastEntryPath,
+                    UseShellExecute = true
+                });
+                AddLog($"Opening: {lastEntryPath}"); 
+            }
+            
+        }
+        catch (Exception ex)
+        {
+            AddLog($"Open action failed: {ex.Message}" +
+                   "try open the file manually (?");
+        }
+
+    }
+
     //IMAGE SELECTOR LOGIC
-    
     private async void OnSelectImageClick(object? sender, RoutedEventArgs e)
     {
-        if (!intakeModeEnabled)
+        if (!_intakeModeEnabled)
         {   
             AddLog("Intake mode is required before importing images.");
             return;
@@ -180,13 +217,17 @@ public partial class MainWindow : Window
 
         try
         {
-            var importService = new LocalImportService(workspacePath, gitUser);
-            var importedFileName = importService.ImportImage(selectedFile);
-            AddLog($"Imported: {importedFileName}");
-
-            //var temporaryLocalAssetName = importService.TempImageName(importedFileName);
-            //AddLog($"Renamed file to: {temporaryLocalAssetName}");
-            ShowSuccessPanel();
+            _importService = new LocalImportService(_workspacePath, _gitUser);
+            var fileName = System.IO.Path.GetFileName(selectedFile);
+            _importService.ValidateFiles(fileName);
+            
+            var renamedFileName = _importService.ImportImage(selectedFile);
+            
+            AddLog($"Imported: {selectedFile}\n" +
+                   $"Renamed to: {renamedFileName}"
+                );
+            
+            await ShowSuccessPanel();
             
         }
         catch (Exception ex)
@@ -215,9 +256,9 @@ public partial class MainWindow : Window
 
             if (!string.IsNullOrEmpty(output))
             {
-                gitUser = output;
+                _gitUser = output;
 
-                AddLog($"Git User: {gitUser}");
+                AddLog($"Git User: {_gitUser}");
 
                 GitUserButton.Content = "Reload Git User";
                 
@@ -239,23 +280,16 @@ public partial class MainWindow : Window
       
     }
 
-    private void ShowSuccessPanel()
+    private async Task ShowSuccessPanel()
     {
         IntakePanel.IsVisible = false;
         SuccessPanel.IsVisible = true;
-
-        StatusLog.Text = "";
+        
         AddLog("Entry added successfully.");
+        await Task.Delay(1000);
+        AddLog("Check /osu-mascot-workspace/local_entries for any uncommited entries and assets");
     }
 
-    private void OnAddOtherEntryClick(object? sender, RoutedEventArgs e)
-    {
-        SuccessPanel.IsVisible = false;
-        IntakePanel.IsVisible = true;
-
-        StatusLog.Text = "";
-        AddLog("Ready to add another entry.");
-    }
     private string ResolveWorkspacePath(string selectedPath)
     {
         var nestedWorkspacePath = System.IO.Path.Combine(
@@ -271,8 +305,8 @@ public partial class MainWindow : Window
     }
     private bool ValidateWorkspaceStructure()
     {
-        var incomingPath = System.IO.Path.Combine(workspacePath, "98_Incoming");
-        var stagingPath = System.IO.Path.Combine(workspacePath, "99_Staging");
+        var incomingPath = System.IO.Path.Combine(_workspacePath, "98_Incoming");
+        var stagingPath = System.IO.Path.Combine(_workspacePath, "99_Staging");
 
         bool incomingExists = System.IO.Directory.Exists(incomingPath);
         bool stagingExists = System.IO.Directory.Exists(stagingPath);
@@ -282,7 +316,7 @@ public partial class MainWindow : Window
 
     private void ExitIntakeMode()
     {
-        intakeModeEnabled = false;
+        _intakeModeEnabled = false;
 
         SetupPanel.IsVisible = true;
         IntakePanel.IsVisible = false;
@@ -296,18 +330,13 @@ public partial class MainWindow : Window
     private LocalImportService? _importService;
     private void EnterIntakeMode()
     {
-        intakeModeEnabled = true;
+        _intakeModeEnabled = true;
         SetupPanel.IsVisible = false;
         IntakePanel.IsVisible = true;
         NextButton.IsVisible = false;
         
         StatusLog.Text = "";
-        _importService = new LocalImportService(workspacePath, gitUser);
+        _importService = new LocalImportService(_workspacePath, _gitUser);
         AddLog("Intake mode enabled.");
     }
-    private void OnLoadGitUserClick(object? sender, RoutedEventArgs e)
-    {
-        LoadGitUser();
-    }
-
 }

@@ -7,13 +7,14 @@ namespace osuArchiveToolkit.Services;
 
 public class LocalImportService
 {
-    private readonly string workspacePath;
-    private readonly string gitUser;
+    private readonly string _workspacePath;
+    private readonly string _gitUser;
+    public string LastEntryTempName { get; private set; } = "";
     
     public LocalImportService(string workspacePath, string gitUser)
     {
-        this.workspacePath = workspacePath;
-        this.gitUser = gitUser;
+        this._workspacePath = workspacePath;
+        this._gitUser = gitUser;
     }
     
     //HELPERS
@@ -28,16 +29,19 @@ public class LocalImportService
                || extension == ".gif";
     }
 
-    public string ImportImage(string selectedFile)
+    public void ValidateFiles(string selectedFile)
     {
-        var fileName = Path.GetFileName(selectedFile);
-        if (!IsSupportedImageFile(fileName))
+        if (!IsSupportedImageFile(selectedFile))
         {
-            throw new InvalidOperationException($"Unsupported image type: {Path.GetExtension(fileName)}");
+            throw new InvalidOperationException($"Unsupported image type: {Path.GetExtension(selectedFile)}");
         }
+
         EnsureLocalDirectories();
-        
-        var tempFileId = TempFileName(fileName);
+
+    }
+    public string ImportImage(string fileName)
+    {
+        var tempFileId = RenameImportingFile(fileName);
         var destinationPath = GetLocalAssetPath(tempFileId);
         var markdownPath = GetLocalEntryMarkdownPath();
 
@@ -52,17 +56,15 @@ public class LocalImportService
             throw new InvalidOperationException($"Entry already exists: {Path.GetFileName(markdownPath)}");
         }
         
-        File.Copy(selectedFile, destinationPath, false);
-        
+        File.Copy(fileName, destinationPath, false);
         var markdownContent = BuildLocalEntryMarkdown(tempFileId);
         File.WriteAllText(markdownPath, markdownContent);
-
-        return fileName;
+        LastEntryTempName = markdownPath;
+        return tempFileId;
     }
-
-    public string TempFileName(string fileName)
+    private string RenameImportingFile(string importedFileName)
     {
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var extension = Path.GetExtension(importedFileName).ToLowerInvariant();
         var temporaryLocalFileName = NextTemporaryLocalLabel() + extension;
         return temporaryLocalFileName;
     }
@@ -82,7 +84,7 @@ public class LocalImportService
     private string GetLocalAssetsPath()
     {
         return Path.Combine(
-            workspacePath,
+            _workspacePath,
             "local_entries",
             "local_assets"
         );
@@ -100,7 +102,7 @@ public class LocalImportService
         foreach (var filePath in entriesList)
         {
             string fileName = Path.GetFileNameWithoutExtension(filePath);
-            string textNumber = fileName.Substring(fileName.Length - 4);
+            string textNumber = fileName.Substring(fileName.Length - 5);
             int number = int.Parse(textNumber);
             idNumbers.Add(number);
         }
@@ -130,7 +132,7 @@ public class LocalImportService
         return $@"---
 title: 
 created_at: {createdAt}
-submitted_by: {gitUser}
+submitted_by: {_gitUser}
 tags:
 date:
 characters:
@@ -155,10 +157,10 @@ curated_by:
 ## Notes
 ";
     }
-    private string GetLocalEntriesPath()
+    public string GetLocalEntriesPath()
     {
         return Path.Combine(
-            workspacePath,
+            _workspacePath,
             "local_entries"
         );
     }
