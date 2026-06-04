@@ -65,8 +65,8 @@
                 IsVisible="False">
                 
                 <TextBlock
-                    x:Name="WorkspaceStatusText"
-                    Text="Workspace: not selected">
+                    x:Name="OsuMascotArchiveStatusText"
+                    Text="Archive: not selected">
                 </TextBlock>
                 
                 <TextBlock
@@ -81,9 +81,9 @@
                    </Button>
                 
                 <Button
-                    x:Name="SelectWorkspaceButton"
-                    Content="Select workspace path"
-                    Click="OnSelectWorkspaceClick">
+                    x:Name="SelectArchiveButton"
+                    Content="Select archive path"
+                    Click="OnSelectArchiveClick">
                 </Button>
                </StackPanel> 
             
@@ -124,11 +124,11 @@
                     HorizontalAlignment="Center">
                 </TextBlock>
                 <Button
-                    x:Name="OpenInObsidianButton"
                     Content="Add other entry"
                     Click="OnAddOtherEntryClick">
                 </Button>
                 <Button
+                    x:Name="OpenInObsidianButton"
                     Content="Open Entry in Obsidian"
                     Click="OnOpenEntryInObsidian">
                 </Button>

@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 using Avalonia.Controls.Shapes;
 using osuArchiveToolkit.Services;
 namespace osuArchiveToolkit;
+using static osuArchiveToolkit.Services.HashManagerService;
+
 public partial class MainWindow : Window
 {
     private string _gitUser = "Unknown";
-    private string _workspacePath = "";
+    private string _osuMascotArchivePath = "";
     private bool _intakeModeEnabled = false;
     public MainWindow()
     {
@@ -20,7 +22,7 @@ public partial class MainWindow : Window
         NextButton.IsVisible = false;
     }
 
-    private async void OnSelectWorkspaceClick(object? sender, RoutedEventArgs e)
+    private async void OnSelectArchiveClick(object? sender, RoutedEventArgs e)
     {
         var startLocation = await StorageProvider.TryGetWellKnownFolderAsync(
             WellKnownFolder.Documents
@@ -29,28 +31,33 @@ public partial class MainWindow : Window
         var folders = await StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions
             {
-                Title = "Select current workspace folder",
+                Title = "Select current Osu Mascot Archive folder",
                 AllowMultiple = false,
                 SuggestedStartLocation = startLocation
             });
-        if (folders.Count > 0)
+        if (folders.Count <= 0) return;
+        _osuMascotArchivePath = ResolveArchivePath(folders[0].Path.LocalPath);
+        _managerService = new HashManagerService(_osuMascotArchivePath);
+        if (!_managerService.CreateHashFiles())
         {
-            _workspacePath = ResolveWorkspacePath(folders[0].Path.LocalPath);
-
-            AddLog($"Workspace selected: {_workspacePath}");
-
-            TryEnterIntakeMode();
+            AddLog("A problem occurred while creating Hash Files");
+            return;   
         }
+ 
+            
+        AddLog($"osu-mascot-archive selected: {_osuMascotArchivePath}");
+
+        TryEnterIntakeMode();
     }
 
     private bool IsSetupComplete()
     {
-        if (string.IsNullOrWhiteSpace(_workspacePath))
+        if (string.IsNullOrWhiteSpace(_osuMascotArchivePath))
         {
             return false;
         }
 
-        if (!ValidateWorkspaceStructure())
+        if (!ValidateArchiveStructure())
         {
             return false;
         }
@@ -65,15 +72,15 @@ public partial class MainWindow : Window
 
     private bool ValidateSetupWithLog()
     {
-        if (string.IsNullOrWhiteSpace(_workspacePath))
+        if (string.IsNullOrWhiteSpace(_osuMascotArchivePath))
         {
-            AddLog("Workspace path is required before continuing");
+            AddLog("Archive path is required before continuing");
             return false;
         }
 
-        if (!ValidateWorkspaceStructure())
+        if (!ValidateArchiveStructure())
         {
-            AddLog("Invalid workspace folder, Select osu-mascot-workspace or the repo folder that contains it");
+            AddLog("Invalid archive folder, update or select osu-mascot-archive folder");
             return false;
         }
 
@@ -82,15 +89,14 @@ public partial class MainWindow : Window
             AddLog("Git username is required before continuing.");
             return false;
         }
-
         return true;
     }
         
     private void UpdateSetupState()
     {
-        WorkspaceStatusText.Text = string.IsNullOrWhiteSpace(_workspacePath)
-            ? "Workspace: not selected"
-            : $"Workspace: {_workspacePath}";
+        OsuMascotArchiveStatusText.Text = string.IsNullOrWhiteSpace(_osuMascotArchivePath)
+            ? "osu mascot archive: not selected"
+            : $"archive: {_osuMascotArchivePath}";
 
         GitUserStatusText.Text = _gitUser == "Unknown"
             ? "Git user: not loaded"
@@ -156,27 +162,19 @@ public partial class MainWindow : Window
         AddLog("Ready to add another entry.");
     }
 
-    private async void OnOpenEntryInObsidian(object? sender, RoutedEventArgs e)
+    private void OnOpenEntryInObsidian(object? sender, RoutedEventArgs e)
     {
-        var lastEntryPath = _importService.LastEntryTempName;
+        var lastEntryPath = _importService?.LastEntryTempName;
 
         try
         {
-            if (OperatingSystem.IsLinux())
+            if (OperatingSystem.IsLinux()) return;
+            Process.Start(new ProcessStartInfo()
             {
-                OpenInObsidianButton.IsVisible = false;
-                AddLog("Ready for editing in obsidian");
-            }
-            else
-            {
-                Process.Start(new ProcessStartInfo()
-                {
-                    FileName = lastEntryPath,
-                    UseShellExecute = true
-                });
-                AddLog($"Opening: {lastEntryPath}"); 
-            }
-            
+                FileName = lastEntryPath,
+                UseShellExecute = true
+            });
+            AddLog($"Opening: {lastEntryPath}");
         }
         catch (Exception ex)
         {
@@ -213,17 +211,24 @@ public partial class MainWindow : Window
             AddLog("No image selected.");
             return;
         }
-        var selectedFile = files[0].Path.LocalPath;
+        var selectedFilePath = files[0].Path.LocalPath;
 
         try
         {
-            _importService = new LocalImportService(_workspacePath, _gitUser);
-            var fileName = System.IO.Path.GetFileName(selectedFile);
+            _importService = new LocalImportService(_osuMascotArchivePath, _gitUser);
+            var fileName = System.IO.Path.GetFileName(selectedFilePath);
             _importService.ValidateFiles(fileName);
+            var isFileDuplicated = _managerService.IsHashFileDuplicated(selectedFilePath);
+                
+            if (isFileDuplicated)
+            {
+                AddLog($"Image already exists in the repo, check {_managerService.LastDuplicatedFilePath}");
+                return;
+            }
+            var renamedFileName = _importService.ImportImage(selectedFilePath);
+            _managerService.WriteLocalHashEntry(_gitUser, _importService.LastImportedAssetPath);
             
-            var renamedFileName = _importService.ImportImage(selectedFile);
-            
-            AddLog($"Imported: {selectedFile}\n" +
+            AddLog($"Imported: {selectedFilePath}\n" +
                    $"Renamed to: {renamedFileName}"
                 );
             
@@ -284,34 +289,42 @@ public partial class MainWindow : Window
     {
         IntakePanel.IsVisible = false;
         SuccessPanel.IsVisible = true;
+        if (OperatingSystem.IsLinux())
+        {
+            OpenInObsidianButton.IsVisible = false;
+        }
         
-        AddLog("Entry added successfully.");
+
+        AddLog("Entry added successfully. Ready for editing in Obsidian");
         await Task.Delay(1000);
         AddLog("Check /osu-mascot-workspace/local_entries for any uncommited entries and assets");
+
     }
 
-    private string ResolveWorkspacePath(string selectedPath)
+    private string ResolveArchivePath(string selectedPath)
     {
-        var nestedWorkspacePath = System.IO.Path.Combine(
+        var nestedArchivePath = System.IO.Path.Combine(
             selectedPath,
-            "osu-mascot-workspace"
+            "osu-mascot-archive"
             );
-        if (System.IO.Directory.Exists(nestedWorkspacePath))
+        if (System.IO.Directory.Exists(nestedArchivePath))
         {
-            return nestedWorkspacePath;
+            return nestedArchivePath;
         }
 
         return selectedPath;
     }
-    private bool ValidateWorkspaceStructure()
+    private bool ValidateArchiveStructure()
     {
-        var incomingPath = System.IO.Path.Combine(_workspacePath, "98_Incoming");
-        var stagingPath = System.IO.Path.Combine(_workspacePath, "99_Staging");
+        var incomingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace/98_Incoming");
+        var stagingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace/99_Staging");
+        var modelsPath = System.IO.Path.Combine(_osuMascotArchivePath, ".Models");
 
         bool incomingExists = System.IO.Directory.Exists(incomingPath);
         bool stagingExists = System.IO.Directory.Exists(stagingPath);
+        bool modelsExists = System.IO.Directory.Exists(modelsPath);
 
-        return incomingExists && stagingExists;
+        return incomingExists && stagingExists && modelsExists;
     }
 
     private void ExitIntakeMode()
@@ -328,6 +341,7 @@ public partial class MainWindow : Window
         UpdateSetupState();
     }
     private LocalImportService? _importService;
+    private HashManagerService? _managerService;
     private void EnterIntakeMode()
     {
         _intakeModeEnabled = true;
@@ -336,7 +350,7 @@ public partial class MainWindow : Window
         NextButton.IsVisible = false;
         
         StatusLog.Text = "";
-        _importService = new LocalImportService(_workspacePath, _gitUser);
+        _importService = new LocalImportService(_osuMascotArchivePath, _gitUser);
         AddLog("Intake mode enabled.");
     }
 }

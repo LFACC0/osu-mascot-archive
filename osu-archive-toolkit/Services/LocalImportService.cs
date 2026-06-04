@@ -3,20 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
+using static osuArchiveToolkit.Services.HashManagerService;
 namespace osuArchiveToolkit.Services;
 
-public class LocalImportService
+public class LocalImportService(string osuMascotArchivePath, string gitUser)
 {
-    private readonly string _workspacePath;
-    private readonly string _gitUser;
     public string LastEntryTempName { get; private set; } = "";
-    
-    public LocalImportService(string workspacePath, string gitUser)
-    {
-        this._workspacePath = workspacePath;
-        this._gitUser = gitUser;
-    }
-    
+    public string LastImportedAssetPath = "";
+
     //HELPERS
     private bool IsSupportedImageFile(string fileName)
     {
@@ -29,26 +23,25 @@ public class LocalImportService
                || extension == ".gif";
     }
 
-    public void ValidateFiles(string selectedFile)
+    public void ValidateFiles(string selectedFilePath)
     {
-        if (!IsSupportedImageFile(selectedFile))
+        if (!IsSupportedImageFile(selectedFilePath))
         {
-            throw new InvalidOperationException($"Unsupported image type: {Path.GetExtension(selectedFile)}");
+            throw new InvalidOperationException($"Unsupported image type: {Path.GetExtension(selectedFilePath)}");
         }
 
         EnsureLocalDirectories();
 
     }
-    public string ImportImage(string fileName)
+    public string ImportImage(string selectedFilePath)
     {
-        var tempFileId = RenameImportingFile(fileName);
-        var destinationPath = GetLocalAssetPath(tempFileId);
-        var markdownPath = GetLocalEntryMarkdownPath();
+        var tempLocalLabel = NextTemporaryLocalLabel();
+        var newImportingFileName = RenameImportingFile(selectedFilePath, tempLocalLabel);
+        var destinationPath = GetLocalAssetPath(newImportingFileName);
+        var markdownPath = GetLocalEntryMarkdownPath(tempLocalLabel);
 
-        if (File.Exists(destinationPath)) //SOLUCIONAR ESTA OPERACIÓN. ACTUALMENTE, NO SE BLOQUEA Y GENERA
-        //ENTRADAS INCREMENTALES SIN TENER EN CUENTA EL CONTENIDO. LO IDEAL ES QUE LEA EL LOCAL HASH
-        //LIST GENERADO POR GIT USER. 
-        {
+        if (File.Exists(destinationPath)) //Modificar esta operación para que verifique duplicados por contenido, no por directorio. 
+        { 
             throw new InvalidOperationException($"Asset already exists: {destinationPath}");
         }
         if (File.Exists(markdownPath))
@@ -56,16 +49,17 @@ public class LocalImportService
             throw new InvalidOperationException($"Entry already exists: {Path.GetFileName(markdownPath)}");
         }
         
-        File.Copy(fileName, destinationPath, false);
-        var markdownContent = BuildLocalEntryMarkdown(tempFileId);
+        File.Copy(selectedFilePath, destinationPath, false);
+        LastImportedAssetPath = destinationPath;
+        var markdownContent = BuildLocalEntryMarkdown(newImportingFileName);
         File.WriteAllText(markdownPath, markdownContent);
         LastEntryTempName = markdownPath;
-        return tempFileId;
+        return newImportingFileName;
     }
-    private string RenameImportingFile(string importedFileName)
+    private string RenameImportingFile(string importedFileName, string tempLocalLabel)
     {
         var extension = Path.GetExtension(importedFileName).ToLowerInvariant();
-        var temporaryLocalFileName = NextTemporaryLocalLabel() + extension;
+        var temporaryLocalFileName = tempLocalLabel + extension;
         return temporaryLocalFileName;
     }
     
@@ -74,21 +68,14 @@ public class LocalImportService
         Directory.CreateDirectory(GetLocalAssetsPath());
         Directory.CreateDirectory(GetLocalEntriesPath());
     }
-    private string GetLocalAssetPath(string fileName)
+    private string GetLocalAssetPath(string newImportingFileName)
     {
         return Path.Combine(
             GetLocalAssetsPath(),
-            fileName
+            newImportingFileName
         );
     }
-    private string GetLocalAssetsPath()
-    {
-        return Path.Combine(
-            _workspacePath,
-            "local_entries",
-            "local_assets"
-        );
-    }
+
     
     private int NextIdNumberAvailable()
     {
@@ -109,13 +96,13 @@ public class LocalImportService
         int nextIdValue = idNumbers.Max() + 1;
         return nextIdValue;
     }
-    private string GetLocalEntryMarkdownPath()
+    private string GetLocalEntryMarkdownPath(string tempLocalLabel)
     {
         var entryFolder = GetLocalEntriesPath();
 
         return Path.Combine(
             entryFolder,
-            $"{NextTemporaryLocalLabel()}.md"
+            $"{tempLocalLabel}.md"
         );
     }
 
@@ -132,7 +119,7 @@ public class LocalImportService
         return $@"---
 title: 
 created_at: {createdAt}
-submitted_by: {_gitUser}
+submitted_by: {gitUser}
 tags:
 date:
 characters:
@@ -157,11 +144,22 @@ curated_by:
 ## Notes
 ";
     }
-    public string GetLocalEntriesPath()
+
+    private string GetLocalEntriesPath()
     {
         return Path.Combine(
-            _workspacePath,
+            osuMascotArchivePath,
+            "osu-mascot-workspace",
             "local_entries"
+        );
+    }
+    private string GetLocalAssetsPath()
+    {
+        return Path.Combine(
+            osuMascotArchivePath,
+            "osu-mascot-workspace",
+            "local_entries",
+            "local_assets"
         );
     }
 }

@@ -25,7 +25,6 @@
   <ItemGroup>
     <Folder Include="Assets\imported\Entries\" />
     <Folder Include="Entries\" />
-    <Folder Include="Models\" />
     <Folder Include="Utilities\" />
     <Folder Include="ViewModels\" />
     <Folder Include="Views\" />
