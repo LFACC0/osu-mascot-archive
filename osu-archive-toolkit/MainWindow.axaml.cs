@@ -13,7 +13,7 @@ public partial class MainWindow : Window
 {
     private string _gitUser = "Unknown";
     private string _osuMascotArchivePath = "";
-    private bool _intakeModeEnabled = false;
+    private bool _intakeModeEnabled;
     public MainWindow()
     {
         InitializeComponent();
@@ -303,16 +303,15 @@ public partial class MainWindow : Window
 
     private string ResolveArchivePath(string selectedPath)
     {
+        var cleanPath = selectedPath.TrimEnd(System.IO.Path.DirectorySeparatorChar);
+
+        if (System.IO.Path.GetFileName(cleanPath) == "osu-mascot-workspace") return System.IO.Path.GetDirectoryName(cleanPath) ?? "";
+        if (cleanPath.Contains("osu-mascot-archive")) return cleanPath;
         var nestedArchivePath = System.IO.Path.Combine(
             selectedPath,
             "osu-mascot-archive"
-            );
-        if (System.IO.Directory.Exists(nestedArchivePath))
-        {
-            return nestedArchivePath;
-        }
-
-        return selectedPath;
+        );
+        return System.IO.Directory.Exists(nestedArchivePath) ? nestedArchivePath : selectedPath;
     }
     private bool ValidateArchiveStructure()
     {
