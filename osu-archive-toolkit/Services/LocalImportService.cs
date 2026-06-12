@@ -12,7 +12,7 @@ public class LocalImportService(string osuMascotArchivePath, string gitUser)
     public string LastImportedAssetPath = "";
 
     //HELPERS
-    private bool IsSupportedImageFile(string fileName)
+    public static bool IsSupportedImageFile(string fileName)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
 

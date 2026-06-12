@@ -226,7 +226,7 @@ public partial class MainWindow : Window
                 return;
             }
             var renamedFileName = _importService.ImportImage(selectedFilePath);
-            _managerService.WriteLocalHashEntry(_gitUser, _importService.LastImportedAssetPath);
+            _managerService.WriteLocalHashEntry(_gitUser, _importService.LastImportedAssetPath, _importService.LastEntryTempName);
             
             AddLog($"Imported: {selectedFilePath}\n" +
                    $"Renamed to: {renamedFileName}"
