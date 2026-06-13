@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         if (folders.Count <= 0) return;
         _osuMascotArchivePath = ResolveArchivePath(folders[0].Path.LocalPath);
         _managerService = new HashManagerService(_osuMascotArchivePath);
-        if (!_managerService.CreateHashFiles())
+        if (!_managerService.CreateListFiles())
         {
             AddLog("A problem occurred while creating Hash Files");
             return;   
@@ -143,7 +143,8 @@ public partial class MainWindow : Window
     {
         ExitIntakeMode();
     }
-    private void AddLog(string message)
+
+    public void AddLog(string message)
     {
         StatusLog.Text += $"\n> {message}";
         StatusLog.CaretIndex = StatusLog.Text.Length;
@@ -198,10 +199,10 @@ public partial class MainWindow : Window
         {
             Title = "Select an image",
             AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                FilePickerFileTypes.ImageAll 
-            }
+            FileTypeFilter =
+            [
+                FilePickerFileTypes.ImageAll
+            ]
         });
         
         SelectImageButton.Content = "Import Image";
@@ -315,8 +316,8 @@ public partial class MainWindow : Window
     }
     private bool ValidateArchiveStructure()
     {
-        var incomingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace/98_Incoming");
-        var stagingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace/99_Staging");
+        var incomingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace", "98_Incoming");
+        var stagingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace", "99_Staging");
         var modelsPath = System.IO.Path.Combine(_osuMascotArchivePath, ".Models");
 
         bool incomingExists = System.IO.Directory.Exists(incomingPath);
