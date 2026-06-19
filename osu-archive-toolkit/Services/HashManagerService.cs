@@ -47,7 +47,7 @@ public class HashManagerService(string osuMascotArchivePath)
 
     public bool IsHashFileDuplicated(string filePath) //TODO: queda pendiente hacer que la función revise y elimine hashes que no tengan un asset antes de asignar un nuevo hash.
     {
-        ReconcileHashListsWithCurrentAssets(); //El nuevo sistema tolerará hasta 1888 assets relacionados a un solo colaborador (teniendo en cuenta como funciona reconcileHashLists(...)).
+        ReconcileHashListsWithCurrentAssets(); //TODO conectar con CheckGitState en LocalImportService: N 187 
         
         var localHashFile = File.ReadAllText(_localHashPath);
         var globalHashFile = File.ReadAllText(_globalHashPath);
@@ -68,25 +68,15 @@ public class HashManagerService(string osuMascotArchivePath)
         return true;
     }
 
-    private string CalculateFileHash(string filePath)
+    public int ReconcileHashListsWithCurrentAssets()
     {
-        if (!File.Exists(filePath)) return "";
-        using var openFile = File.OpenRead(filePath);
-        var hashFileBytes = SHA256.HashData(openFile);
-        var hashBytesText = Convert.ToHexString(hashFileBytes).ToLowerInvariant();
-        _localHashFileString = hashBytesText;
-
-        return hashBytesText;
-    }
-private int ReconcileHashListsWithCurrentAssets()
-    { 
         _localHashList = JsonSerializer.Deserialize<List<HashEntry>>(
         File.ReadAllText(_localHashPath)) ?? [];
         _globalHashList = JsonSerializer.Deserialize<List<HashEntry>>(
         File.ReadAllText(_globalHashPath)) ?? [];
         var reconciliationList = new Dictionary<HashEntry, ReconciliationState>(); //usar esto para descartar archivos reconciliados
         
-        foreach (var nextLocalEntry in _localHashList) // Local Asset Checker TODO
+        foreach (var nextLocalEntry in _localHashList) // Local Asset Checker
         {
             var nextByteSize = nextLocalEntry.ByteSize;
             var nextCurrentPath = nextLocalEntry.LastFilePath;
@@ -119,7 +109,7 @@ private int ReconcileHashListsWithCurrentAssets()
             }
 
             var externalFileList = Directory.GetFiles(
-                Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local-entries"),
+                Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries"),
                 "*.*", SearchOption.AllDirectories);
             foreach (var nextFileInParentDirectory in externalFileList) //Third check filter
             {
@@ -141,7 +131,7 @@ private int ReconcileHashListsWithCurrentAssets()
 
         }
 
-        var unresolvedLocalList = reconciliationList
+        var unresolvedLocalList = reconciliationList //eliminación de hash entries sin resolver para la hash list local
             .Where(r => r.Value == ReconciliationState.Unresolved)
             .Select(r => r.Key);
         _localHashList.RemoveAll(e => unresolvedLocalList.Any(u => u.Hash == e.Hash));
@@ -150,6 +140,8 @@ private int ReconcileHashListsWithCurrentAssets()
         {
             reconciliationList[entry] = ReconciliationState.Removed;
         }
+
+        if (CheckGitState()) return 0; 
         
         foreach (var nextGlobalEntry in _globalHashList) // Global Asset Checker
         {
@@ -203,7 +195,7 @@ private int ReconcileHashListsWithCurrentAssets()
                || reconciliationList[nextGlobalEntry] != ReconciliationState.Correct) 
                 reconciliationList[nextGlobalEntry] = ReconciliationState.Unresolved;
         }
-        CollectUnlistedLocalAssets();
+        CollectUnlistedGlobalAssets();
         //pensar que quizás estos assets puedan estar relacionados con alguna entrada de .md y que no estén registrados en las listas.
         return 0; //devolver un valor que indique cuantos archivos se han reconciliado.
     } 
@@ -228,17 +220,28 @@ private int ReconcileHashListsWithCurrentAssets()
         File.WriteAllText(_localHashPath, localJson);
     }
 
-    private void CollectUnlistedLocalAssets()
+    private string CalculateFileHash(string filePath)
+    {
+        if (!File.Exists(filePath)) return "";
+        using var openFile = File.OpenRead(filePath);
+        var hashFileBytes = SHA256.HashData(openFile);
+        var hashBytesText = Convert.ToHexString(hashFileBytes).ToLowerInvariant();
+        _localHashFileString = hashBytesText;
+
+        return hashBytesText;
+    }
+
+    private void CollectUnlistedGlobalAssets()
     {
         var allImages = Directory
             .GetFiles(Path.Combine(osuMascotArchivePath, "osu-mascot-workspace"), "*.*", SearchOption.AllDirectories)
-            .Where(f => !f.Contains("local-entries") && LocalImportService.IsSupportedImageFile(f));
+            .Where(f => !f.Contains("local_entries") && LocalImportService.IsSupportedImageFile(f));
 
         foreach (var nextUnresolvedFile in allImages)
         {
             var hash = CalculateFileHash(nextUnresolvedFile);
-            bool isListed = _localHashList.Any(e => e.Hash == hash)
-                            || _globalHashList.Any(e => e.Hash == hash);
+            var isListed = _localHashList.Any(e => e.Hash == hash)
+                           || _globalHashList.Any(e => e.Hash == hash);
             if (isListed) continue;
 
             var unverifiedAssetPath = Path.Combine(
@@ -259,7 +262,38 @@ private int ReconcileHashListsWithCurrentAssets()
         } 
     }
     //hash lists directory checking helpers
-    
+    private bool CheckGitState()
+    {
+        try
+        {
+            var process = new Process();
+
+            process.StartInfo.FileName = "git";
+            process.StartInfo.Arguments = "pull";
+
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+
+            process.Start();
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit();
+            var exitCode = process.ExitCode;
+            
+            if (exitCode == 0)
+            {
+                return true;
+            }
+            LocalImportService.WriteLog(output, "");
+        }
+        catch (Exception error)
+        {
+            var textError = Convert.ToString(error) ?? "Unknown unregistered exception";
+            LocalImportService.WriteLog(textError, osuMascotArchivePath);
+        }
+        
+        return false;
+    }
     private void WriteReconciliationLog(string message, string relatedHash, string relatedPath)
     {
         var logEntry = new ReconciliationLogEntry()
@@ -278,8 +312,6 @@ private int ReconcileHashListsWithCurrentAssets()
         { WriteIndented = true });
         File.WriteAllText(_reconciliationLogPath, logJson);
     }
-    private enum ReconciliationState { Correct, Unresolved, Unknown, Removed }
-    private enum EventType { Deleted, Moved, Changed, }
     private bool IsListsPathsAvailable()
     {
         return !string.IsNullOrWhiteSpace(osuMascotArchivePath)
@@ -331,5 +363,7 @@ private int ReconcileHashListsWithCurrentAssets()
             ".Models"
         );
     }
-    
+
+    private enum ReconciliationState { Correct, Unresolved, Unknown, Removed }
+    private enum EventType { Deleted, Moved, Changed, } //TODO capturar otros movimientos y acciones del reconciliador
 }
