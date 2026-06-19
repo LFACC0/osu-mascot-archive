@@ -21,6 +21,7 @@ public class HashManagerService(string osuMascotArchivePath)
     private string _localHashFileString = "";
     private List<HashEntry> _localHashList = [];
     private List<HashEntry> _globalHashList = [];
+    private List<ReconciliationLogEntry> _reconciliationLogEntries = [];
     public string LastDuplicatedFilePath { get; private set; } = "";
     public int LastReconciledCount { get; private set; }
 
@@ -69,41 +70,48 @@ public class HashManagerService(string osuMascotArchivePath)
 
     public int ReconcileHashListsWithCurrentAssets()
     {
-        _localHashList = LoadHashList(_localHashPath);
-        _globalHashList = LoadHashList(_globalHashPath);
-        var reconciliationList = new Dictionary<HashEntry, ReconciliationState>();
-
-        // 1. Reconciliación local: corrige las rutas de los assets locales contra el disco.
-        var localSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries");
-        var correctedCount = ReconcileEntryList(_localHashList, localSearchDirectory, reconciliationList);
-
-        // Las entradas locales que no se pudieron resolver se eliminan de la lista local.
-        var unresolvedLocal = reconciliationList
-            .Where(r => r.Value == ReconciliationState.Unresolved)
-            .Select(r => r.Key)
-            .ToList();
-        _localHashList.RemoveAll(e => unresolvedLocal.Any(u => u.Hash == e.Hash));
-        foreach (var entry in unresolvedLocal)
+        try
         {
-            reconciliationList[entry] = ReconciliationState.Removed;
-            WriteReconciliationLog(nameof(EventType.Deleted), entry.Hash, entry.LastFilePath);
+            _localHashList = LoadHashList(_localHashPath);
+            _globalHashList = LoadHashList(_globalHashPath);
+            var reconciliationList = new Dictionary<HashEntry, ReconciliationState>();
+
+            // 1. Reconciliación local: corrige las rutas de los assets locales contra el disco.
+            var localSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries");
+            var correctedCount = ReconcileEntryList(_localHashList, localSearchDirectory, reconciliationList);
+
+            // Las entradas locales que no se pudieron resolver se eliminan de la lista local.
+            var unresolvedLocal = reconciliationList
+                .Where(r => r.Value == ReconciliationState.Unresolved)
+                .Select(r => r.Key)
+                .ToList();
+            _localHashList.RemoveAll(e => unresolvedLocal.Any(u => u.Hash == e.Hash));
+            foreach (var entry in unresolvedLocal)
+            {
+                reconciliationList[entry] = ReconciliationState.Removed;
+                WriteReconciliationLog(nameof(EventType.Deleted), entry.Hash, entry.LastFilePath);
+            }
+            correctedCount += unresolvedLocal.Count;
+
+            // Se persiste la lista local aquí: el trabajo local es válido aunque el pull falle después.
+            PersistHashList(_localHashList, _localHashPath);
+
+            // 2. git pull. Si no se logra sincronizar con remoto, se aborta antes de lo global.
+            if (!CheckGitState()) return correctedCount;
+
+            // 3. Reconciliación global: ya con el repo actualizado desde remoto (doble chequeo).
+            var globalSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace");
+            correctedCount += ReconcileEntryList(_globalHashList, globalSearchDirectory, reconciliationList);
+
+            CollectUnlistedGlobalAssets();
+            PersistHashList(_globalHashList, _globalHashPath);
+            return correctedCount;
         }
-        correctedCount += unresolvedLocal.Count;
-
-        // Se persiste la lista local aquí: el trabajo local es válido aunque el pull falle después.
-        PersistHashList(_localHashList, _localHashPath);
-
-        // 2. git pull. Si no se logra sincronizar con remoto, se aborta antes de lo global.
-        if (!CheckGitState()) return correctedCount;
-
-        // 3. Reconciliación global: ya con el repo actualizado desde remoto (doble chequeo).
-        var globalSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace");
-        correctedCount += ReconcileEntryList(_globalHashList, globalSearchDirectory, reconciliationList);
-
-        CollectUnlistedGlobalAssets();
-        PersistHashList(_globalHashList, _globalHashPath);
-
-        return correctedCount;
+        finally
+        {
+            PersistReconciliationLog(_reconciliationLogEntries); //qué pasa si la función no puede escribir? Todos los cambios de archivos quedan en memoria y se pierden. Revisar esto más adelante.
+            _reconciliationLogEntries = [];
+        }
     }
     public void WriteLocalHashEntry(string gitUser, string lastImportedAssetPath, string lastEntryPath)
     {
@@ -280,6 +288,8 @@ public class HashManagerService(string osuMascotArchivePath)
         
         return false;
     }
+    
+    
     private void WriteReconciliationLog(string message, string relatedHash, string relatedPath)
     {
         var logEntry = new ReconciliationLogEntry()
@@ -289,15 +299,21 @@ public class HashManagerService(string osuMascotArchivePath)
             EventType = message,
             OccurredAt = DateTime.Now.ToString("u")
         };
+        _reconciliationLogEntries.Add(logEntry);
+    }
+    private void PersistReconciliationLog(List<ReconciliationLogEntry> unsavedLogEntries)
+    {
+        if (unsavedLogEntries.Count == 0) return;
         var currentLogList = File.ReadAllText(_reconciliationLogPath);
-        var logEntries = JsonSerializer.Deserialize<List<ReconciliationLogEntry>>(currentLogList) ?? [];
+        var deserializedLog = JsonSerializer.Deserialize<List<ReconciliationLogEntry>>(currentLogList) ?? [];
+
+        deserializedLog.AddRange(unsavedLogEntries);
         
-        logEntries.Add(logEntry);
-        
-        var logJson = JsonSerializer.Serialize(logEntries, new JsonSerializerOptions()
-        { WriteIndented = true });
+        var logJson = JsonSerializer.Serialize(deserializedLog, new JsonSerializerOptions()
+            { WriteIndented = true });
         File.WriteAllText(_reconciliationLogPath, logJson);
     }
+    
     private bool IsListsPathsAvailable()
     {
         return !string.IsNullOrWhiteSpace(osuMascotArchivePath)
