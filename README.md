@@ -45,7 +45,7 @@ git clone git@github.com:FatalNight/osu-mascot-archive.git
 
 # 3. Open Vault
 
-### Obsidian (necessary for reading .md and its special sintaxis used for obsidian plugins)
+### Install Obsidian (necessary for reading .md and its special sintaxis used for obsidian plugins)
 
 Download:
 
