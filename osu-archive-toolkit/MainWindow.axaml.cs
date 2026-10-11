@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using System.Diagnostics;
+using System.Net.Security;
 using System.Threading.Tasks;
 using Avalonia.Controls.Shapes;
 using osuArchiveToolkit.Services;
@@ -19,12 +20,12 @@ public partial class MainWindow : Window
     
     public MainWindow()
     {
-        LoadGitUser();
         InitializeComponent();
         _importService = new LocalImportService(_osuMascotArchivePath, _gitUser);
         _managerService = new HashManagerService(_osuMascotArchivePath);
         StatusLog.Text = "Welcome to the toolkit!";
         NextButton.IsVisible = false;
+        LoadGitUser();
     }
 
     private async void OnSelectArchiveClick(object? sender, RoutedEventArgs e)
@@ -43,12 +44,6 @@ public partial class MainWindow : Window
         if (folders.Count <= 0) return;
         _osuMascotArchivePath = ResolveArchivePath(folders[0].Path.LocalPath);
         _managerService = new HashManagerService(_osuMascotArchivePath);
-        if (!_managerService.CreateListFiles())
-        {
-            AddLog("A problem occurred while creating Hash Files");
-            return;   
-        }
- 
             
         AddLog($"osu-mascot-archive selected: {_osuMascotArchivePath}");
 
@@ -147,7 +142,7 @@ public partial class MainWindow : Window
             _importService = new LocalImportService(_osuMascotArchivePath, _gitUser);
             var fileName = System.IO.Path.GetFileName(selectedFilePath);
             _importService.ValidateFiles(fileName);
-            var isFileDuplicated = _managerService.IsHashFileDuplicated(selectedFilePath);
+            var isFileDuplicated = _managerService.IsHashFileDuplicated(selectedFilePath); //here it only does a quick check against the reconciled hash lists and sends a message.
                 
             if (isFileDuplicated)
             {
@@ -155,7 +150,7 @@ public partial class MainWindow : Window
                 return;
             }
             var renamedFileName = _importService.ImportImage(selectedFilePath);
-            _managerService.WriteLocalHashEntry(_gitUser, _importService.LastImportedAssetPath, _importService.LastEntryTempName);
+            _managerService.WriteHashEntry(_gitUser, _importService.LastImportedAssetPath, _importService.LastEntryTempName, EntryScope.Local);
             
             AddLog($"Imported: {selectedFilePath}\n" +
                    $"Renamed to: {renamedFileName}"
@@ -198,11 +193,66 @@ public partial class MainWindow : Window
         {
             return;
         }
-        
+        if (!_managerService.CreateListFiles())
+        {
+            AddLog("A problem occurred while creating Hash Files");
+            return;   
+        }
         AddLog("Setup complete. Ready to continue.");
     }
-    private void EnterIntakeMode()
+    
+    private async void EnterIntakeMode() 
     {
+        var progress = new Progress<int>(n => AddLog($"Managed Files: {n}"));
+        try
+        {
+            AddLog("Checking current state of local entries...");
+            await Task.Run(() => _managerService.ReconcileLocalHashListWithCurrentAssets(progress));
+
+            var (isRepoUpdated, gitMessage) = _managerService.RepoUpdateState();
+            switch (isRepoUpdated)
+            {
+                case RepoStatus.UpToDate:
+                {
+                    if (_managerService.IsDirectoryAssetsTotalSizeEqualToLists())
+                    {
+                        break;
+                    }
+
+                    AddLog("Local changes detected on disk, reconciling...");
+                    ProgressBarSwitch(true);
+                    await Task.Run(() => _managerService.ReconcileGlobalHashListWithCurrentAssets(progress));
+                    break;
+                }
+                case RepoStatus.OutDated:
+                {
+                    AddLog(gitMessage);
+                    ProgressBarSwitch(true);
+                    await Task.Run(() => _managerService.ReconcileGlobalHashListWithCurrentAssets(progress));
+                    break;
+                }
+                case RepoStatus.CheckFailed:
+                {
+                    AddLog($"Error:\n{gitMessage}");
+                    return;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(isRepoUpdated), isRepoUpdated,
+                        "Estado de repo no contemplado");
+            }
+
+        }
+        catch (Exception error)
+        {
+            AddLog($"Error:{error} \n" + "please try again or report this issue");
+
+        }
+        finally
+        {
+            await Task.Delay(2000);
+            ProgressBarSwitch(false);
+        }
+        
         _intakeModeEnabled = true;
         SetupPanel.IsVisible = false;
         IntakePanel.IsVisible = true;
@@ -211,6 +261,7 @@ public partial class MainWindow : Window
         StatusLog.Text = "";
         _importService = new LocalImportService(_osuMascotArchivePath, _gitUser);
         AddLog("Intake mode enabled.");
+
     }
     private void ExitIntakeMode()
     {
@@ -251,12 +302,9 @@ public partial class MainWindow : Window
             return false;
         }
 
-        if (_gitUser == "Unknown")
-        {
-            AddLog("Git username is required before continuing.");
-            return false;
-        }
-        return true;
+        if (_gitUser != "Unknown") return true;
+        AddLog("Git username is required before continuing.");
+        return false;
     }
     private void LoadGitUser()
     {
@@ -306,6 +354,13 @@ public partial class MainWindow : Window
         StatusLog.Text += $"\n> {message}";
         StatusLog.CaretIndex = StatusLog.Text.Length;
     }
+
+    private void ProgressBarSwitch(bool isOn)
+    {
+        LoadingBar.IsVisible = isOn;
+    }
+
+
     
     //LOGIC STUFF THAT SHOULD BE IN OTHER SERVICE.
     private string ResolveArchivePath(string selectedPath)
@@ -324,12 +379,10 @@ public partial class MainWindow : Window
     {
         var incomingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace", "98_Incoming");
         var stagingPath = System.IO.Path.Combine(_osuMascotArchivePath, "osu-mascot-workspace", "99_Staging");
-        var modelsPath = System.IO.Path.Combine(_osuMascotArchivePath, ".Models");
 
         var incomingExists = System.IO.Directory.Exists(incomingPath);
         var stagingExists = System.IO.Directory.Exists(stagingPath);
-        var modelsExists = System.IO.Directory.Exists(modelsPath);
 
-        return incomingExists && stagingExists && modelsExists;
+        return incomingExists && stagingExists;
     }
 }

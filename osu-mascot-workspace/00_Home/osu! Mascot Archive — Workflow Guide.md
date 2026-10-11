@@ -18,32 +18,44 @@
 ```text
 osu-mascot-archive/
 
-    00_Home/
+	osu-mascot-workspace/
+	    00_Home/
+	    01_Templates/
+	    
+	    02_Assets/
+	        official/
+	        community/
+	        contests/
+	        memes/
+	        screenshots/
+	        lost-media/
+	        
+	    03_Characters/
+	    04_Artwork/
+	    05_Artists/
+	    06_Eras/
+	    07_Events/
+	    
+	    98_Incoming/
+		    Incoming-assets/
+		    Incoming-entries/
+	    
 
-    01_Characters/
-    02_Artwork/
-    03_Artists/
-    04_Events/
-    05_Eras/
-    06_Concepts/
+	    99_Staging/
+	        00_inbox/
+	        01_needs-id/
+	        02_needs-source/
+	        03_needs-tags/
+	        04_possible-duplicates/
+	        05_unverified/
+		        unverified-assets
+	        
+	    local_entries
+		    local_assets
+		    unverified-assets
+		    
+		README.md
 
-    07_Assets/
-        official/
-        community/
-        contests/
-        memes/
-        screenshots/
-        lost-media/
-
-    08_Templates/
-
-    99_Staging/
-        00_inbox/
-        01_needs-id/
-        02_needs-source/
-        03_needs-tags/
-        04_possible-duplicates/
-        05_unverified/
 ```
 
 ---

@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="osu-archive-toolkit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
       <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
   

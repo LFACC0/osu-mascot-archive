@@ -55,9 +55,13 @@
                 AcceptsReturn="True"
                 FontSize="15"
                 Height="250">
-                
             </TextBox>
-               
+            <ProgressBar 
+                x:Name="LoadingBar"
+                IsIndeterminate="True"
+                IsVisible="False">
+            </ProgressBar>
+        
             <!-- SETUP PANEL -->
             <StackPanel
                 x:Name="SetupPanel"

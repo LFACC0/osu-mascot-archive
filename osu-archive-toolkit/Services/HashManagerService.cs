@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using osuArchiveToolkit.Models;
 using System.Linq;
+using System.Xml;
 using Avalonia.Controls;
 using Avalonia.Controls.Converters;
 
@@ -15,15 +16,15 @@ namespace osuArchiveToolkit.Services;
 
 public class HashManagerService(string osuMascotArchivePath)
 {
-    private string _globalHashPath = "";
-    private string _localHashPath = "";
+    public string GlobalHashPath = "";
+    public string LocalHashPath = "";
     private string _reconciliationLogPath = "";
-    private string _localHashFileString = "";
+    private readonly string[] _globalExcludedPaths = ["local_entries", "00_Home", "01_Templates", "duplicated-assets"];
     private List<HashEntry> _localHashList = [];
     private List<HashEntry> _globalHashList = [];
     private List<ReconciliationLogEntry> _reconciliationLogEntries = [];
+    private IProgress<int>? _progress;
     public string LastDuplicatedFilePath { get; private set; } = "";
-    public int LastReconciledCount { get; private set; }
 
     public bool CreateListFiles()
     {
@@ -32,15 +33,15 @@ public class HashManagerService(string osuMascotArchivePath)
             Directory.CreateDirectory(GetGlobalListsPath());
             Directory.CreateDirectory(GetLocalHashPath());
         }
-        _globalHashPath = EnsureGlobalHashList();
-        _localHashPath = EnsureLocalHashList();
+        GlobalHashPath = EnsureGlobalHashList();
+        LocalHashPath = EnsureLocalHashList();
         _reconciliationLogPath = EnsureGlobalLogList();
 
-        if (!File.Exists(_globalHashPath)) 
-            File.WriteAllText(_globalHashPath, "[]");
+        if (!File.Exists(GlobalHashPath)) 
+            File.WriteAllText(GlobalHashPath, "[]");
         
-        if (!File.Exists(_localHashPath)) 
-            File.WriteAllText(_localHashPath, "[]");
+        if (!File.Exists(LocalHashPath)) 
+            File.WriteAllText(LocalHashPath, "[]");
         
         if (!File.Exists(_reconciliationLogPath)) 
             File.WriteAllText(_reconciliationLogPath, "[]");
@@ -49,10 +50,8 @@ public class HashManagerService(string osuMascotArchivePath)
 
     public bool IsHashFileDuplicated(string filePath)
     {
-        LastReconciledCount = ReconcileHashListsWithCurrentAssets();
-
-        var localHashList = LoadHashList(_localHashPath);
-        var globalHashList = LoadHashList(_globalHashPath);
+        var localHashList = LoadHashList(LocalHashPath);
+        var globalHashList = LoadHashList(GlobalHashPath);
         var localFileHash = CalculateFileHash(filePath);
         var duplicatedEntry = localHashList.FirstOrDefault(entry => entry.Hash == localFileHash);
         
@@ -68,19 +67,30 @@ public class HashManagerService(string osuMascotArchivePath)
         return true;
     }
 
-    public int ReconcileHashListsWithCurrentAssets()
+    private static bool IsFileStructuresEqualToLists(string selectedPath, List<HashEntry> hashList, params string[] excludedPaths)
     {
+        
+        var selectedFileAssetsBytes = GetAllSupportedFilesRecursively(selectedPath, true, excludedPaths).Sum(f => new FileInfo(f).Length);
+        var markdownFileCount = GetAllMarkdownFilesRecursively(selectedPath, true, excludedPaths).Count();
+        var selectedListAssetsBytes = hashList.Sum(e => e.ByteSize);
+        var markdownListCount = hashList.Select(e => e.LastEntryPath).Distinct().Count();
+
+        return (selectedFileAssetsBytes == selectedListAssetsBytes && markdownListCount == markdownFileCount);
+    }
+    public int ReconcileLocalHashListWithCurrentAssets(IProgress<int>? progress = null)
+    {
+        var localEntriesPath = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries"); //HARDCODING WARNING
+        _progress = progress;
         try
         {
-            _localHashList = LoadHashList(_localHashPath);
-            _globalHashList = LoadHashList(_globalHashPath);
+            _localHashList = LoadHashList(LocalHashPath);
+            if (IsFileStructuresEqualToLists(localEntriesPath, _localHashList)) return 0;
             var reconciliationList = new Dictionary<HashEntry, ReconciliationState>();
 
-            // 1. Reconciliación local: corrige las rutas de los assets locales contra el disco.
-            var localSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries");
-            var correctedCount = ReconcileEntryList(_localHashList, localSearchDirectory, reconciliationList);
+            // 1. Local reconciliation: fixes the paths of the local assets against the disk.
+            var correctedCount = ReconcileHashEntries(_localHashList, localEntriesPath, reconciliationList);
 
-            // Las entradas locales que no se pudieron resolver se eliminan de la lista local.
+            // Local entries that could not be resolved are removed from the local list.
             var unresolvedLocal = reconciliationList
                 .Where(r => r.Value == ReconciliationState.Unresolved)
                 .Select(r => r.Key)
@@ -89,35 +99,52 @@ public class HashManagerService(string osuMascotArchivePath)
             foreach (var entry in unresolvedLocal)
             {
                 reconciliationList[entry] = ReconciliationState.Removed;
-                WriteReconciliationLog(nameof(EventType.Deleted), entry.Hash, entry.LastFilePath);
+                WriteReconciliationLog("",nameof(EventType.Deleted), entry.Hash, entry.LastFilePath);
             }
             correctedCount += unresolvedLocal.Count;
 
-            // Se persiste la lista local aquí: el trabajo local es válido aunque el pull falle después.
-            PersistHashList(_localHashList, _localHashPath);
-
-            // 2. git pull. Si no se logra sincronizar con remoto, se aborta antes de lo global.
-            if (!CheckGitState()) return correctedCount;
-
-            // 3. Reconciliación global: ya con el repo actualizado desde remoto (doble chequeo).
-            var globalSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace");
-            correctedCount += ReconcileEntryList(_globalHashList, globalSearchDirectory, reconciliationList);
-
-            CollectUnlistedGlobalAssets();
-            PersistHashList(_globalHashList, _globalHashPath);
+            // The local list is persisted here: local work stays valid even if the pull fails afterwards.
+            PersistHashList(_localHashList, LocalHashPath);
             return correctedCount;
         }
         finally
         {
-            PersistReconciliationLog(_reconciliationLogEntries); //qué pasa si la función no puede escribir? Todos los cambios de archivos quedan en memoria y se pierden. Revisar esto más adelante.
+            PersistReconciliationLog(_reconciliationLogEntries); //what happens if this function cannot write? Every file change stays in memory and is lost. Revisit this later.
             _reconciliationLogEntries = [];
         }
     }
-    public void WriteLocalHashEntry(string gitUser, string lastImportedAssetPath, string lastEntryPath)
+    public int ReconcileGlobalHashListWithCurrentAssets(IProgress<int>? progress = null)
+    {
+        _progress = progress;
+        try
+        {
+            _globalHashList = LoadHashList(GlobalHashPath);
+            var globalSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace"); //HARDCODED PATH WARNING HERE
+            
+            // 2. git pull. If syncing with the remote fails, we abort before touching anything global.
+            var correctedCount = 0;
+            if (!CheckGitState()) return correctedCount;
+            if (IsFileStructuresEqualToLists(globalSearchDirectory, _globalHashList, _globalExcludedPaths)) return correctedCount;
+
+            // 3. Global reconciliation: the repo is already up to date from the remote (double check).
+            var reconciliationList = new Dictionary<HashEntry, ReconciliationState>();
+            correctedCount += ReconcileHashEntries(_globalHashList, globalSearchDirectory, reconciliationList, _globalExcludedPaths);
+
+            CollectUnlistedGlobalAssets();
+            PersistHashList(_globalHashList, GlobalHashPath);
+            return correctedCount;
+        }
+        finally
+        {
+            PersistReconciliationLog(_reconciliationLogEntries); //what happens if this function cannot write? Every file change stays in memory and is lost. Revisit this later.
+            _reconciliationLogEntries = [];
+        }
+    }
+    public void WriteHashEntry(string gitUser, string lastImportedAssetPath, string lastEntryPath, EntryScope scope)
     {
         var entry = new HashEntry()
         {
-            Hash = _localHashFileString,
+            Hash = CalculateFileHash(lastImportedAssetPath),
             HashCreatedAt = DateTime.UtcNow.ToString("u"),
             SubmittedBy = gitUser,
             LastFilePath = lastImportedAssetPath,
@@ -125,9 +152,9 @@ public class HashManagerService(string osuMascotArchivePath)
             LastEntryPath = lastEntryPath
         };
 
-        var hashEntries = LoadHashList(_localHashPath);
+        var hashEntries = LoadHashList(scope == EntryScope.Local ? LocalHashPath : GlobalHashPath);
         hashEntries.Add(entry);
-        PersistHashList(hashEntries, _localHashPath);
+        PersistHashList(hashEntries, LocalHashPath);
     }
 
     private string CalculateFileHash(string filePath)
@@ -136,17 +163,17 @@ public class HashManagerService(string osuMascotArchivePath)
         using var openFile = File.OpenRead(filePath);
         var hashFileBytes = SHA256.HashData(openFile);
         var hashBytesText = Convert.ToHexString(hashFileBytes).ToLowerInvariant();
-        _localHashFileString = hashBytesText;
 
         return hashBytesText;
     }
 
-    // Reconcilia una lista de hashes contra el disco. Devuelve cuántas entradas se reubicaron.
-    // Comparte el diccionario de estados con el llamador para no reclamar dos veces el mismo archivo.
-    private int ReconcileEntryList(
+    // Reconciles a hash list against the disk. Returns how many entries were relocated.
+    // Shares the state dictionary with the caller so the same file is never claimed twice.
+    private int ReconcileHashEntries(
         List<HashEntry> hashList,
         string externalSearchDirectory,
-        Dictionary<HashEntry, ReconciliationState> reconciliationList)
+        Dictionary<HashEntry, ReconciliationState> reconciliationList,
+        params string[] excludedPaths)
     {
         var relocatedCount = 0;
 
@@ -156,28 +183,28 @@ public class HashManagerService(string osuMascotArchivePath)
             var currentDirectory = Path.GetDirectoryName(currentPath) ?? "";
             var checkHash = CalculateFileHash(currentPath);
 
-            // Filtro 1: el archivo sigue donde lo esperamos y su contenido no cambió.
+            // Filter 1: the file is still where we expect it and its content did not change.
             if (File.Exists(currentPath) && checkHash == entry.Hash)
             {
                 reconciliationList[entry] = ReconciliationState.Correct;
                 continue;
             }
 
-            // El archivo existe en su ruta pero su contenido cambió: se registra el evento.
+            // The file exists at its path but its content changed: the event gets logged.
             if (checkHash != entry.Hash)
             {
-                reconciliationList[entry] = ReconciliationState.Unknown;
+                reconciliationList[entry] = ReconciliationState.Stale;
                 if (File.Exists(currentPath))
-                    WriteReconciliationLog(nameof(EventType.Changed), entry.Hash, currentPath);
+                    WriteReconciliationLog("",nameof(EventType.Changed), entry.Hash, currentPath);
             }
 
-            // Filtro 2: mismo directorio. Filtro 3: en el directorio de búsqueda externo.
-            // Ambos emparejan por tamaño en bytes.
-            if (TryRelocateBySize(entry, currentDirectory, reconciliationList, recursive: false)
-                || TryRelocateBySize(entry, externalSearchDirectory, reconciliationList, recursive: true))
+            // Filter 2: same directory. Filter 3: the external search directory.
+            // Both match by size in bytes.
+            if (TryRelocateBySize(entry, currentDirectory, reconciliationList, recursive: false, excludedPaths)
+                || TryRelocateBySize(entry, externalSearchDirectory, reconciliationList, recursive: true, excludedPaths))
             {
                 relocatedCount++;
-                WriteReconciliationLog(nameof(EventType.Moved), entry.Hash, entry.LastFilePath);
+                WriteReconciliationLog("",nameof(EventType.Moved), entry.Hash, entry.LastFilePath);
                 continue;
             }
 
@@ -189,23 +216,20 @@ public class HashManagerService(string osuMascotArchivePath)
         return relocatedCount;
     }
 
-    // Busca en searchDirectory un archivo soportado, aún no reclamado, del mismo tamaño que la entrada.
-    // Si lo encuentra, actualiza su LastFilePath y lo marca como Correct.
-    private bool TryRelocateBySize(
+    // Looks in searchDirectory for a supported, not yet claimed file with the same size as the entry.
+    // If it finds one, it updates its LastFilePath and marks it as Correct.
+    private static bool TryRelocateBySize(
         HashEntry entry,
         string searchDirectory,
         Dictionary<HashEntry, ReconciliationState> reconciliationList,
-        bool recursive)
+        bool recursive,
+        params string[] excludedPaths)
     {
-        if (!Directory.Exists(searchDirectory)) return false;
+        var selectedFiles = GetAllSupportedFilesRecursively(searchDirectory, recursive, excludedPaths);
 
-        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-        foreach (var candidate in Directory.GetFiles(searchDirectory, "*", searchOption))
+        foreach (var candidate in selectedFiles)
         {
-            if (!LocalImportService.IsSupportedImageFile(candidate)
-                || reconciliationList.Any(r => r.Key.LastFilePath == candidate)) continue;
-
+            if (reconciliationList.Any(r => r.Key.LastFilePath == candidate)) continue;
             if (new FileInfo(candidate).Length != entry.ByteSize) continue;
 
             entry.LastFilePath = candidate;
@@ -216,7 +240,7 @@ public class HashManagerService(string osuMascotArchivePath)
         return false;
     }
 
-    private static List<HashEntry> LoadHashList(string path) =>
+    public static List<HashEntry> LoadHashList(string path) =>
         JsonSerializer.Deserialize<List<HashEntry>>(File.ReadAllText(path)) ?? [];
 
     private static void PersistHashList(List<HashEntry> hashList, string path)
@@ -227,35 +251,100 @@ public class HashManagerService(string osuMascotArchivePath)
 
     private void CollectUnlistedGlobalAssets()
     {
-        //refactorizar esto para que sea más dinámico (soportará cambios en la estructura de directorios en el futuro)
+        //refactor this to be more dynamic (it will have to support directory structure changes in the future)
         var unverifiedDirectory = Path.Combine(
             osuMascotArchivePath, "osu-mascot-workspace", "99_Staging", "05_unverified", "unverified-assets");
         Directory.CreateDirectory(unverifiedDirectory);
 
-        var allImages = Directory
-            .GetFiles(Path.Combine(osuMascotArchivePath, "osu-mascot-workspace"), "*.*", SearchOption.AllDirectories)
-            .Where(f => !f.Contains("local_entries") && LocalImportService.IsSupportedImageFile(f));
+        var osuWorkspacePath = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace");
+
+        // The destination folder itself is excluded so already collected assets are not reprocessed (nor recopied over themselves).
+        var allImages = GetAllSupportedFilesRecursively(osuWorkspacePath, true, [.._globalExcludedPaths, unverifiedDirectory]);
 
         foreach (var nextUnresolvedFile in allImages)
         {
             var hash = CalculateFileHash(nextUnresolvedFile);
-            var isListed = _localHashList.Any(e => e.Hash == hash)
-                           || _globalHashList.Any(e => e.Hash == hash);
-            if (isListed) continue;
+            var matchedLocalEntry = _localHashList.FirstOrDefault(e => e.Hash == hash);
+            var matchedGlobalEntry = _globalHashList.FirstOrDefault(e => e.Hash == hash);
+            var matchedPath = matchedGlobalEntry?.LastFilePath ?? matchedLocalEntry?.LastFilePath;
+            var isListed = !string.IsNullOrEmpty(matchedPath);
+            var nextFilePath = Path.GetFullPath(nextUnresolvedFile);
+            var isCanonical = isListed && string.Equals(nextFilePath, Path.GetFullPath(matchedPath!),
+                StringComparison.Ordinal) && File.Exists(matchedPath);
+            
+            if (File.Exists(matchedPath) && isListed && isCanonical ) continue;
 
-            var unverifiedAssetPath = Path.Combine(unverifiedDirectory, Path.GetFileName(nextUnresolvedFile));
+            if (!File.Exists(matchedPath) && isListed && matchedGlobalEntry is not null)
+            { 
+                matchedGlobalEntry.LastFilePath = nextFilePath; 
+                WriteReconciliationLog("Redirected Asset Path of existent Global Entry with valid new asset", nameof(EventType.Adopted), 
+                    hash, "Related Entry: " + matchedGlobalEntry.LastEntryPath);
+                continue;
+
+            }
+
+            if (matchedGlobalEntry is not null && matchedLocalEntry is not null)
+            {
+                WriteReconciliationLog("How.",
+                    nameof(EventType.Unexpected), hash, 
+                    $"{matchedGlobalEntry.LastEntryPath} has the same asset as {matchedLocalEntry.LastEntryPath}");
+                continue;
+            }
+            if (matchedLocalEntry is not null)
+            {
+                WriteReconciliationLog("Global Asset is matching a local Entry", nameof(EventType.Unexpected), hash,
+                    $"Asset path {nextFilePath} matches entry located at {matchedLocalEntry.LastFilePath}");
+                continue;
+            }
+            
+            var unverifiedAssetPath = Path.Combine(unverifiedDirectory, hash + "_" + Path.GetFileName(nextUnresolvedFile));
+            var duplicatedAssetPath = Path.Combine(osuWorkspacePath, "99_Staging",
+                "04_possible-duplicates", "duplicated-assets", hash + "_" + Path.GetFileName(nextUnresolvedFile));
             try
             {
-                File.Copy(nextUnresolvedFile, unverifiedAssetPath);
+                if (File.Exists(matchedPath))
+                {
+                    File.Copy(nextUnresolvedFile, duplicatedAssetPath, true);
+                    if (!File.Exists(duplicatedAssetPath))
+                    {
+                        WriteReconciliationLog("An error occured trying to move the duplicated asset", 
+                            nameof(EventType.Failed), hash, $"from {nextUnresolvedFile} to {duplicatedAssetPath}");
+                        continue;
+                    }
+                    File.Delete(nextUnresolvedFile);
+                    WriteReconciliationLog("",nameof(EventType.Duplicated), hash, duplicatedAssetPath);
+                    continue;
+                }
+                File.Copy(nextUnresolvedFile, unverifiedAssetPath, true);
             }
             catch (Exception error)
             {
-                WriteReconciliationLog(Convert.ToString(error) ?? "Unknown unregistered exception", hash, nextUnresolvedFile);
+                WriteReconciliationLog(
+                    Convert.ToString(error) ?? "Unknown unregistered exception",
+                    nameof(EventType.Failed), hash, nextUnresolvedFile);
                 continue;
             }
 
-            if (File.Exists(unverifiedAssetPath)) File.Delete(nextUnresolvedFile);
+            if (!File.Exists(unverifiedAssetPath))
+            {
+                WriteReconciliationLog("An error occured trying to move the unverified asset", 
+                    nameof(EventType.Failed), hash, $"from {nextFilePath} to {unverifiedAssetPath}");
+                continue;
+            }
+            File.Delete(nextUnresolvedFile); 
+            WriteReconciliationLog("",nameof(EventType.Collected), hash, unverifiedAssetPath);
         }
+    }
+
+    public bool IsDirectoryAssetsTotalSizeEqualToLists()
+    {
+        var localEntriesPath = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace", "local_entries"); //HARDCODING WARNING
+        var globalSearchDirectory = Path.Combine(osuMascotArchivePath, "osu-mascot-workspace"); //HARDCODED PATH WARNING HERE
+        var isGlobalStructureMatchingLists = IsFileStructuresEqualToLists(globalSearchDirectory, LoadHashList(GlobalHashPath), _globalExcludedPaths);
+        var isLocalStructureMatchingLists = IsFileStructuresEqualToLists(localEntriesPath, LoadHashList(LocalHashPath));
+        
+
+        return (isLocalStructureMatchingLists && isGlobalStructureMatchingLists);
     }
     //hash lists directory checking helpers
     private bool CheckGitState()
@@ -290,16 +379,18 @@ public class HashManagerService(string osuMascotArchivePath)
     }
     
     
-    private void WriteReconciliationLog(string message, string relatedHash, string relatedPath)
+    private void WriteReconciliationLog(string message, string eventType, string relatedHash, string relatedPath)
     {
         var logEntry = new ReconciliationLogEntry()
         {
             LastKnownPath = relatedPath,
             Hash = relatedHash,
-            EventType = message,
+            EventType = eventType,
+            Message = message,
             OccurredAt = DateTime.Now.ToString("u")
         };
         _reconciliationLogEntries.Add(logEntry);
+        _progress?.Report(_reconciliationLogEntries.Count);
     }
     private void PersistReconciliationLog(List<ReconciliationLogEntry> unsavedLogEntries)
     {
@@ -313,7 +404,63 @@ public class HashManagerService(string osuMascotArchivePath)
             { WriteIndented = true });
         File.WriteAllText(_reconciliationLogPath, logJson);
     }
-    
+
+    public (RepoStatus IsComplete, string MessageOutput) RepoUpdateState()
+    {
+        var (globalOutput, globalExitCode) = RunGitCommand("ls-remote origin -h refs/heads/main");
+        var (localOutput, localExitCode) = RunGitCommand("rev-parse main");
+
+        var globalSha = globalOutput.Split('\t')[0];
+        var localSha = localOutput.Split('\t')[0];
+        var shasMatch = localSha == globalSha;
+        var writeLog = $"git: {globalOutput} \n" + $"git: {localOutput}";
+        
+        if (globalExitCode != 0 || localExitCode != 0)
+        {
+            return (RepoStatus.CheckFailed, 
+                writeLog);
+        }
+        return shasMatch ? (RepoStatus.UpToDate, "") 
+            : (RepoStatus.OutDated,writeLog);
+    }
+
+    private (string output, int exitCode) RunGitCommand(string arguments)
+    {
+        var process = new Process();
+
+        process.StartInfo.FileName = "git";
+        process.StartInfo.Arguments = arguments;
+        process.StartInfo.WorkingDirectory = osuMascotArchivePath;
+        process.StartInfo.RedirectStandardError = true;
+
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.UseShellExecute = false;
+        process.Start();
+        
+        var output = process.StandardOutput.ReadToEnd().Trim(); 
+        if(string.IsNullOrEmpty(output)) output = process.StandardError.ReadToEnd().Trim();
+        process.WaitForExit();
+        return (output, process.ExitCode);
+    } //UNSOLVED WARNING: possible deadlock caused by buffer cap (~4KB of available space) in long stream calls.
+
+    public static IEnumerable<string> GetAllSupportedFilesRecursively(
+        string specificPath, bool recursive = true, params string[] excludedPaths)
+    {
+        if (!Directory.Exists(specificPath)) return [];
+        
+        var rawFilesList= Directory
+            .GetFiles(specificPath, "*.*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly) //REMOVE THE HARDCODED PATH HERE. CAREFUL.
+            .Where(f => LocalImportService.IsSupportedImageFile(f) && !excludedPaths.Any(f.Contains));
+        return rawFilesList;
+    }
+
+    public static IEnumerable<string> GetAllMarkdownFilesRecursively(
+        string selectedPath, bool recursive = true, params string[] excludedPaths)
+    {
+        return Directory.GetFiles(selectedPath, "*.md",
+                recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+            .Where(f => !excludedPaths.Any(f.Contains));
+    }
     private bool IsListsPathsAvailable()
     {
         return !string.IsNullOrWhiteSpace(osuMascotArchivePath)
@@ -366,6 +513,9 @@ public class HashManagerService(string osuMascotArchivePath)
         );
     }
 
-    private enum ReconciliationState { Correct, Unresolved, Unknown, Removed }
-    private enum EventType { Deleted, Moved, Changed, } //TODO capturar otros movimientos y acciones del reconciliador
+    private enum ReconciliationState { Correct, Unresolved, Stale, Removed}
+    private enum EventType { Deleted, Moved, Changed, Collected, Failed, Duplicated, Adopted, Unexpected } 
+    public enum RepoStatus { UpToDate, OutDated, CheckFailed }
+    public enum EntryScope {Global, Local} 
+
 }
