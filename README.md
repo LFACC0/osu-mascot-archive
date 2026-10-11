@@ -1,19 +1,24 @@
 # DISCLAIMER
-This project is in a very early WIP stage. 
+This project is in indefinite hiatus (I need to find a job sadly :c )
 
 
 # osu! Mascot Archive
+This app is intended to be used as a toolkit designed to create and control a database ready to edit through the Obsidian app, backed up, shared and updated through this Github repo.
+The goal of this is to allow and focus a medium scale of image sharing and storing between collaborators, all this from different devices and OS. 
 
-Welcome to this first stage of collaborative research and preservation profect for osu! mascot-related media, artwork, references, concepts and community history.
+The dev challenge: ¿How to design a environment friendly enough for any person to access and collaborate? ¿How to set the logic behind and make it robust enough, for an app designed to communicate through a database avoiding data lost and duplication? 
 
-This archive aims to document both official and fan-created material in a structured format.
+
 
 # If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
-(I'll be really glad to cooperate and push the pending features with you. I'm still very new to the Csharp enviroment and the code writing).
+(I'll be really glad to cooperate and push the pending features with you. I'm still learning Csharp).
 
 [Preview of the toolkit I'm working on](https://youtu.be/jqpfQ-Opb-g)
 
-
+---
+---
+---
+---
 ---
 
 If you want to test this system, feel free to follow the instructions and rules written down here.
@@ -28,32 +33,23 @@ Arch / EndeavourOS:
 ```bash
 sudo pacman -S git git-lfs
 ```
-
 ---
-
-### Obsidian
-
-Download:
-
-https://obsidian.md/
-
----
-
 # 2. Clone Repository
-
-```bash
-git clone git@github.com:USER/REPO.git
-```
-
-Example:
 
 ```bash
 git clone git@github.com:FatalNight/osu-mascot-archive.git
 ```
 
+
 ---
 
 # 3. Open Vault
+
+### Obsidian (necessary for reading .md and its special sintaxis used for obsidian plugins)
+
+Download:
+
+https://obsidian.md/
 
 In Obsidian:
 
