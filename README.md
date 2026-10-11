@@ -1,5 +1,5 @@
 # DISCLAIMER
-This project is in indefinite hiatus (I need to find a job sadly :c )
+This project is in indefinite hiatus
 
 
 # osu! Mascot Archive
@@ -9,18 +9,11 @@ The goal of this is to allow and focus a medium scale of image sharing and stori
 The dev challenge: ¿How to design a environment friendly enough for any person to access and collaborate? ¿How to set the logic behind and make it robust enough, for an app designed to communicate through a database avoiding data lost and duplication? 
 
 
-
-# If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
+ If you want to help developing and coding the toolkit, feel free to DM me in Discord! @lfauc
 (I'll be really glad to cooperate and push the pending features with you. I'm still learning Csharp).
-
 [Preview of the toolkit I'm working on](https://youtu.be/jqpfQ-Opb-g)
 
 ---
----
----
----
----
-
 If you want to test this system, feel free to follow the instructions and rules written down here.
 # osu! Mascot Archive — Testing Setup
 
